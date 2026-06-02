@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="halo-left" class="screen-halo halo-left"></div>
+<div id="halo-right" class="screen-halo halo-right"></div>
     <main class="app-shell">
       <header class="top-bar">
         <div>
@@ -36,6 +38,7 @@
         <div class="debug-row">
           <strong id="connection-status">Device: Not connected</strong>
           <label><input id="debug-toggle" type="checkbox" checked /> Show round timing</label>
+          <label><input id="sim-toggle" type="checkbox" /> Simulation mode (L / R keys inject scans)</label>
         </div>
 
         <div class="log-heading">

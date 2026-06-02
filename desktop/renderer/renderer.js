@@ -31,6 +31,7 @@ const elements = {
   connectButton: document.querySelector("#connect-button"),
   connectionStatus: document.querySelector("#connection-status"),
   debugToggle: document.querySelector("#debug-toggle"),
+  simToggle: document.querySelector("#sim-toggle"),
   clearLogButton: document.querySelector("#clear-log-button"),
   logList: document.querySelector("#log-list")
 };
@@ -134,8 +135,12 @@ function parseFields(line) {
   }, {});
 }
 
+function isSimMode() {
+  return elements.simToggle.checked;
+}
+
 async function startSession() {
-  if (!state.connected) {
+  if (!state.connected && !isSimMode()) {
     elements.settingsPanel.hidden = false;
     addLog("Connect the MCU before starting.");
     return;
@@ -269,7 +274,7 @@ async function startActiveTimerAndScanning() {
 async function setScanMode(mode) {
   state.scanEnabled = mode !== "OFF";
 
-  if (!state.connected) {
+  if (!state.connected || isSimMode()) {
     return;
   }
 
@@ -322,6 +327,8 @@ function receiveScan(hole, uid) {
     roundComplete = Object.values(round.holes).every((item) => item.count >= item.target);
   }
 
+  triggerScreenHalo(hole);
+
   state.scans.push({
     round: state.roundIndex + 1,
     mode: round.mode,
@@ -367,10 +374,10 @@ function renderHome() {
   state.phase = "HOME";
   elements.gameScreen.innerHTML = `
     <section class="center-screen">
-      <p class="large-kicker">Welcome</p>
       <h2>Ready to play?</h2>
       <p class="supporting-text">Follow the instructions shown on the screen.</p>
-      <button id="start-button" class="start-button" type="button">Start Game</button>
+      <p class="supporting-text">This game takes about 5 minutes.</p>
+      <button id="start-button" class="start-button" type="button">&#9654; Start Game</button>
     </section>
   `;
   document.querySelector("#start-button").addEventListener("click", startSession);
@@ -603,6 +610,26 @@ function randomInteger(minimum, maximum) {
 function shuffle(items) {
   return [...items].sort(() => Math.random() - 0.5);
 }
+
+function triggerScreenHalo(hole) {
+  const el = document.querySelector(hole === "LEFT" ? "#halo-left" : "#halo-right");
+  el.classList.remove("active");
+  void el.offsetWidth;
+  el.classList.add("active");
+}
+
+document.addEventListener("keydown", (event) => {
+  if (!isSimMode() || !state.scanEnabled) return;
+
+  const key = event.key.toUpperCase();
+  if (key !== "L" && key !== "R") return;
+
+  const hole = key === "L" ? "LEFT" : "RIGHT";
+  const uids = Object.keys(TAGS);
+  const uid = uids[Math.floor(Math.random() * uids.length)];
+  addLog(`SIM|HOLE:${hole}|UID:${uid}`);
+  receiveScan(hole, uid);
+});
 
 function addLog(text) {
   const item = document.createElement("li");

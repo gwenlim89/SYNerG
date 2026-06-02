@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Adafruit_PN532.h>
+#include <FastLED.h>
 
 // Shared SPI bus for the two PN532 readers.
 #define PN532_SCK_PIN    4
@@ -8,6 +9,16 @@
 #define PN532_MOSI_PIN   6
 #define LEFT_SS_PIN      3
 #define RIGHT_SS_PIN     7
+
+// APA102 LED strip (software SPI — no conflict with PN532 hardware SPI).
+#define LED_DATA_PIN     9
+#define LED_CLK_PIN      10
+#define NUM_LEDS         16
+#define LED_DURATION_MS  1000
+
+CRGB leds[NUM_LEDS];
+unsigned long leftLedOffAt  = 0;
+unsigned long rightLedOffAt = 0;
 
 #define READ_TIMEOUT_MS 200
 #define SETUP_ATTEMPTS  3
@@ -24,6 +35,40 @@ bool leftArmed = false;
 bool rightArmed = false;
 bool leftTagPresent = false;
 bool rightTagPresent = false;
+
+void setupLeds() {
+  FastLED.addLeds<APA102, LED_DATA_PIN, LED_CLK_PIN, BGR>(leds, NUM_LEDS);
+  FastLED.setBrightness(80);
+  FastLED.clear(true);
+}
+
+void triggerLed(const char* hole) {
+  unsigned long offAt = millis() + LED_DURATION_MS;
+  if (strcmp(hole, "LEFT") == 0) {
+    for (int i = 0; i < 8; i++) leds[i] = CRGB::Blue;
+    leftLedOffAt = offAt;
+  } else {
+    for (int i = 8; i < 16; i++) leds[i] = CRGB::Blue;
+    rightLedOffAt = offAt;
+  }
+  FastLED.show();
+}
+
+void updateLeds() {
+  unsigned long now = millis();
+  bool changed = false;
+  if (leftLedOffAt && now >= leftLedOffAt) {
+    for (int i = 0; i < 8; i++) leds[i] = CRGB::Black;
+    leftLedOffAt = 0;
+    changed = true;
+  }
+  if (rightLedOffAt && now >= rightLedOffAt) {
+    for (int i = 8; i < 16; i++) leds[i] = CRGB::Black;
+    rightLedOffAt = 0;
+    changed = true;
+  }
+  if (changed) FastLED.show();
+}
 
 void deselectAllReaders() {
   digitalWrite(LEFT_SS_PIN, HIGH);
@@ -200,6 +245,7 @@ void pollReader(
   Serial.print("|UID:");
   printUid(uid, uidLength);
   Serial.println();
+  triggerLed(hole);
 }
 
 void setup() {
@@ -208,6 +254,8 @@ void setup() {
 
   Serial.println();
   Serial.println("BOOT|DEVICE:ORDER_STACK_COGNITIVE_ROUNDS");
+
+  setupLeds();
 
   pinMode(LEFT_SS_PIN, OUTPUT);
   pinMode(RIGHT_SS_PIN, OUTPUT);
@@ -232,6 +280,7 @@ void setup() {
 
 void loop() {
   handleSerialCommands();
+  updateLeds();
 
   if (scanLeftEnabled) {
     pollReader(leftReader, "LEFT", leftReady, leftArmed, leftTagPresent);

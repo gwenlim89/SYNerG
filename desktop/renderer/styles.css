@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  --background: #fffdf9;
+  --background: #fdf4e7;
   --panel: #ffffff;
   --ink: #17211d;
   --muted: #53625b;
@@ -146,9 +146,22 @@ h2 {
 }
 
 .start-button {
-  min-width: 260px;
+  min-width: 300px;
+  min-height: 84px;
   margin-top: 16px;
-  font-size: 1.4rem;
+  padding: 0 52px;
+  font-size: 1.7rem;
+  border-radius: 12px;
+  letter-spacing: 0.01em;
+}
+
+.start-button:hover {
+  background: var(--accent-dark);
+}
+
+.start-button:focus-visible {
+  outline: 4px solid var(--accent-dark);
+  outline-offset: 4px;
 }
 
 .secondary-button {
@@ -399,6 +412,35 @@ h2 {
   color: #246a63;
   font-size: 7rem;
   line-height: 0.8;
+}
+
+.screen-halo {
+  position: fixed;
+  top: 0;
+  width: 42%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+}
+
+.halo-left {
+  left: 0;
+  background: radial-gradient(ellipse at left center, rgba(59, 130, 246, 0.28) 0%, transparent 70%);
+}
+
+.halo-right {
+  right: 0;
+  background: radial-gradient(ellipse at right center, rgba(59, 130, 246, 0.28) 0%, transparent 70%);
+}
+
+.screen-halo.active {
+  animation: halo-fade 1.4s ease-out forwards;
+}
+
+@keyframes halo-fade {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .debug-time {
