@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Stack</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <div>
+          <p class="eyebrow">Cognitive Activity</p>
+          <h1>Order Stack</h1>
+        </div>
+        <button id="settings-button" class="icon-button" type="button" aria-label="Staff settings" title="Staff settings">⚙</button>
+      </header>
+
+      <section id="game-screen" class="game-screen"></section>
+
+      <section id="settings-panel" class="settings-panel" hidden>
+        <div class="settings-heading">
+          <div>
+            <p class="eyebrow">Staff Area</p>
+            <h2>Device and debug tools</h2>
+          </div>
+          <button id="close-settings-button" class="icon-button" type="button" aria-label="Close settings" title="Close settings">×</button>
+        </div>
+
+        <div class="connection-row">
+          <select id="port-select" aria-label="Serial port"></select>
+          <button id="refresh-button" class="secondary-button" type="button">Refresh</button>
+          <button id="connect-button" class="primary-button" type="button">Connect MCU</button>
+        </div>
+
+        <div class="debug-row">
+          <strong id="connection-status">Device: Not connected</strong>
+          <label><input id="debug-toggle" type="checkbox" checked /> Show round timing</label>
+        </div>
+
+        <div class="log-heading">
+          <h3>Serial Monitor</h3>
+          <button id="clear-log-button" class="secondary-button" type="button">Clear</button>
+        </div>
+        <ol id="log-list"></ol>
+      </section>
+    </main>
+    <script src="renderer.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,526 @@
+:root {
+  color-scheme: light;
+  --background: #fffdf9;
+  --panel: #ffffff;
+  --ink: #17211d;
+  --muted: #53625b;
+  --line: #cbd4cf;
+  --accent: #17635b;
+  --accent-dark: #104b45;
+  --accent-soft: #dff0ed;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--ink);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(1320px, calc(100% - 48px));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 20px 0;
+}
+
+.top-bar,
+.settings-heading,
+.connection-row,
+.debug-row,
+.log-heading,
+.play-header,
+.summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow,
+.round-label,
+.mode-label,
+.hole-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  margin-top: 4px;
+  font-size: 2.5rem;
+}
+
+h2 {
+  font-size: clamp(2.6rem, 5vw, 4.7rem);
+  line-height: 1.06;
+}
+
+.icon-button {
+  width: 58px;
+  height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--accent-dark);
+  font-size: 1.9rem;
+  cursor: pointer;
+}
+
+.game-screen {
+  min-height: calc(100vh - 112px);
+  display: grid;
+}
+
+.center-screen,
+.play-screen,
+.final-screen {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  width: 100%;
+  min-height: calc(100vh - 112px);
+  gap: 22px;
+  text-align: center;
+}
+
+.large-kicker {
+  color: var(--accent-dark);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.game-name {
+  color: var(--accent-dark);
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.supporting-text {
+  color: var(--muted);
+  font-size: 1.55rem;
+  line-height: 1.45;
+}
+
+.start-button,
+.primary-button,
+.secondary-button {
+  min-height: 62px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 28px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.start-button,
+.primary-button {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.start-button {
+  min-width: 260px;
+  margin-top: 16px;
+  font-size: 1.4rem;
+}
+
+.secondary-button {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.hole-instruction {
+  border: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 16px 26px;
+  color: var(--accent-dark);
+  font-size: 2rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hole-instruction.compact {
+  margin-top: 4px;
+}
+
+.countdown {
+  color: var(--accent-dark);
+  font-size: 13rem;
+  line-height: 1;
+}
+
+.play-screen {
+  align-content: start;
+  padding-top: 104px;
+}
+
+.play-header {
+  width: 100%;
+}
+
+.memory-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.memorize-timer {
+  position: relative;
+  display: grid;
+  width: 158px;
+  height: 158px;
+  place-items: center;
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.memorize-timer strong {
+  position: absolute;
+  font-size: 4.7rem;
+  line-height: 1;
+}
+
+.timer-ring {
+  width: 158px;
+  height: 158px;
+  transform: rotate(-90deg);
+}
+
+.timer-track,
+.timer-progress {
+  fill: none;
+  stroke-width: 13;
+}
+
+.timer-track {
+  stroke: var(--accent-soft);
+}
+
+.timer-progress {
+  stroke: var(--accent);
+  stroke-dasharray: 427.3;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  animation: drain-timer 5s linear forwards;
+}
+
+@keyframes drain-timer {
+  to {
+    stroke-dashoffset: 427.3;
+  }
+}
+
+.session-progress {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  width: 100%;
+  text-align: left;
+}
+
+.progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.progress-track {
+  display: block;
+  height: 16px;
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eef2ef;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: 8px;
+  background: var(--accent);
+  transition: width 320ms ease;
+}
+
+.attribute-box {
+  display: grid;
+  place-items: center;
+  width: 148px;
+  height: 148px;
+  border: 4px solid #293730;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.color-box {
+  border-color: var(--token-color);
+  background: var(--token-color);
+}
+
+.blank {
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.sorting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 26px;
+  width: min(940px, 100%);
+  margin-top: 24px;
+}
+
+.sort-column {
+  border: 3px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.sort-rule,
+.sort-progress {
+  display: grid;
+  place-items: center;
+  gap: 16px;
+  min-height: 218px;
+  padding: 20px;
+}
+
+.sort-progress {
+  border-top: 3px solid var(--line);
+}
+
+.sort-progress span,
+.score-block span,
+.summary-row span {
+  color: var(--muted);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.sort-progress strong {
+  font-size: 4rem;
+}
+
+.sort-progress small {
+  font-size: 1.7rem;
+}
+
+.rule-box {
+  width: 132px;
+  height: 132px;
+}
+
+.shape {
+  display: block;
+  width: 82px;
+  height: 82px;
+  background: #246a63;
+}
+
+.circle {
+  border-radius: 50%;
+}
+
+.oval {
+  height: 60px;
+  border-radius: 50%;
+}
+
+.triangle {
+  width: 0;
+  height: 0;
+  border-right: 48px solid transparent;
+  border-bottom: 86px solid #246a63;
+  border-left: 48px solid transparent;
+  background: transparent;
+}
+
+.square {
+  border-radius: 4px;
+}
+
+.rectangle {
+  width: 100px;
+  height: 60px;
+}
+
+.semicircle {
+  height: 44px;
+  border-radius: 82px 82px 0 0;
+}
+
+.pentagon {
+  clip-path: polygon(50% 0%, 98% 36%, 80% 100%, 20% 100%, 2% 36%);
+}
+
+.hexagon {
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
+.star {
+  width: auto;
+  height: auto;
+  background: transparent;
+  color: #246a63;
+  font-size: 7rem;
+  line-height: 0.8;
+}
+
+.debug-time {
+  color: var(--accent-dark);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.score-block {
+  display: grid;
+  min-width: 280px;
+  border: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.score-block strong {
+  color: var(--accent-dark);
+  font-size: 5rem;
+}
+
+.score-block small {
+  color: var(--muted);
+  font-size: 1.2rem;
+}
+
+.summary-row {
+  width: min(520px, 100%);
+}
+
+.summary-row div {
+  display: grid;
+  gap: 6px;
+}
+
+.summary-row strong {
+  font-size: 2rem;
+}
+
+.results-details {
+  width: min(620px, 100%);
+  margin-top: 10px;
+  color: var(--muted);
+  text-align: left;
+}
+
+summary {
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+table {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px;
+}
+
+.settings-panel {
+  position: fixed;
+  inset: 18px;
+  z-index: 10;
+  overflow: auto;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 22px;
+  background: #ffffff;
+  box-shadow: 0 18px 60px rgba(23, 33, 29, 0.2);
+}
+
+.settings-heading h2 {
+  margin-top: 5px;
+  font-size: 2rem;
+}
+
+.connection-row,
+.debug-row,
+.log-heading {
+  margin-top: 20px;
+}
+
+select {
+  flex: 1;
+  min-height: 62px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 1.1rem;
+}
+
+#log-list {
+  height: 330px;
+  overflow: auto;
+  color: #42514a;
+  font-family: Menlo, Monaco, monospace;
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    width: min(100% - 24px, 720px);
+  }
+
+  .sorting-grid {
+    gap: 12px;
+  }
+
+  .attribute-box {
+    width: 112px;
+    height: 112px;
+  }
+
+  .connection-row,
+  .debug-row {
+    display: grid;
+  }
+}

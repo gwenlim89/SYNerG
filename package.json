@@ -1,0 +1,16 @@
+{
+  "name": "order-stack-cognitive-rounds",
+  "version": "1.0.0",
+  "description": "Elderly-friendly Electron game with alternating NFC memory and sorting rounds.",
+  "main": "desktop/main.js",
+  "scripts": {
+    "start": "env -u ELECTRON_RUN_AS_NODE electron ."
+  },
+  "dependencies": {
+    "@serialport/parser-readline": "^12.0.0",
+    "electron": "^31.0.0",
+    "serialport": "^12.0.0"
+  },
+  "devDependencies": {}
+}
+
