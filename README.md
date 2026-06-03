@@ -23,6 +23,27 @@ Game instructions appear once before the first memory round and once before the 
 | Left reader SS | GPIO7 |
 | Right reader SS | GPIO2 |
 
+## LED strip wiring
+
+The game firmware uses the same FastLED setup as the working LED test:
+
+| LED strip input | ESP32-C3 pin |
+| --- | --- |
+| Data input | GPIO9 |
+| 5V | 5V / VBUS |
+| GND | GND |
+
+The strip is treated as 16 LEDs:
+
+| LEDs | Game side |
+| --- | --- |
+| 1-8 | Left hole |
+| 9-16 | Right hole |
+
+Memory rounds light the selected side yellow. Each accepted scan flashes that side blue. At the end of a round, the final blue scan shows first, then a perfect round flashes green sparkles and an imperfect round flashes red sparkles. Sorting color rounds light each side using the requested color; sorting shape rounds use soft white. The final screen shows a moving rainbow.
+
+The firmware emits `REMOVED|HOLE:LEFT` or `REMOVED|HOLE:RIGHT` when a tag leaves a reader. This lets the same token be reused immediately after removal without counting a stuck token repeatedly.
+
 ## Upload firmware
 
 ```bash

@@ -3,22 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Order Stack</title>
+    <title>Kitten Nibbles</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div id="halo-left" class="screen-halo halo-left"></div>
-<div id="halo-right" class="screen-halo halo-right"></div>
-    <main class="app-shell">
-      <header class="top-bar">
-        <div>
-          <p class="eyebrow">Cognitive Activity</p>
-          <h1>Order Stack</h1>
-        </div>
-        <button id="settings-button" class="icon-button" type="button" aria-label="Staff settings" title="Staff settings">⚙</button>
-      </header>
+    <div id="halo-right" class="screen-halo halo-right"></div>
 
-      <section id="game-screen" class="game-screen"></section>
+    <main class="app-shell">
+      <section class="game-frame">
+        <div id="sky" class="sky">
+          <div class="hud">
+            <button id="language-toggle" class="language-toggle" type="button" aria-label="Toggle language" title="Toggle language">EN</button>
+            <button id="settings-button" class="settings-button" type="button" aria-label="Staff settings" title="Staff settings">⚙</button>
+            <strong id="connection-status" class="connection-chip">Device: Not connected</strong>
+            <div class="progress-meter" aria-label="game progress">
+              <span id="hud-progress"></span>
+              <strong id="hud-percent">0%</strong>
+            </div>
+          </div>
+
+          <div class="cloud cloud-one" aria-hidden="true"></div>
+          <div class="cloud cloud-two" aria-hidden="true"></div>
+          <div class="cloud cloud-three" aria-hidden="true"></div>
+
+          <section id="game-screen" class="screen"></section>
+
+          <div class="hills hill-back" aria-hidden="true"></div>
+          <div class="hills hill-front" aria-hidden="true"></div>
+          <div class="ground" aria-hidden="true"></div>
+        </div>
+      </section>
 
       <section id="settings-panel" class="settings-panel" hidden>
         <div class="settings-heading">
@@ -26,7 +41,7 @@
             <p class="eyebrow">Staff Area</p>
             <h2>Device and debug tools</h2>
           </div>
-          <button id="close-settings-button" class="icon-button" type="button" aria-label="Close settings" title="Close settings">×</button>
+          <button id="close-settings-button" class="settings-close-button" type="button" aria-label="Close settings" title="Close settings">×</button>
         </div>
 
         <div class="connection-row">
@@ -36,9 +51,7 @@
         </div>
 
         <div class="debug-row">
-          <strong id="connection-status">Device: Not connected</strong>
           <label><input id="debug-toggle" type="checkbox" checked /> Show round timing</label>
-          <label><input id="sim-toggle" type="checkbox" /> Simulation mode (L / R keys inject scans)</label>
         </div>
 
         <div class="log-heading">
@@ -48,7 +61,7 @@
         <ol id="log-list"></ol>
       </section>
     </main>
+
     <script src="renderer.js"></script>
   </body>
 </html>
-
