@@ -10,9 +10,8 @@
 #define LEFT_SS_PIN      3
 #define RIGHT_SS_PIN     7
 
-// APA102 LED strip (software SPI — no conflict with PN532 hardware SPI).
+// WS2812B NeoPixel strip, data on pin 9.
 #define LED_DATA_PIN     9
-#define LED_CLK_PIN      10
 #define NUM_LEDS         16
 #define LED_DURATION_MS  1000
 
@@ -37,7 +36,7 @@ bool leftTagPresent = false;
 bool rightTagPresent = false;
 
 void setupLeds() {
-  FastLED.addLeds<APA102, LED_DATA_PIN, LED_CLK_PIN, BGR>(leds, NUM_LEDS);
+  FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(80);
   FastLED.clear(true);
 }
@@ -45,7 +44,7 @@ void setupLeds() {
 void triggerLed(const char* hole) {
   unsigned long offAt = millis() + LED_DURATION_MS;
   if (strcmp(hole, "LEFT") == 0) {
-    for (int i = 0; i < 8; i++) leds[i] = CRGB::Blue;
+    for (int i = 0; i < 8; i++) leds[i] = CRGB(255, 20, 147);  // deep pink
     leftLedOffAt = offAt;
   } else {
     for (int i = 8; i < 16; i++) leds[i] = CRGB::Blue;
