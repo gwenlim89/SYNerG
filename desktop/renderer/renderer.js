@@ -57,6 +57,10 @@ const state = {
   sortingRoundIndex: -1,
   currentRound: null,
   roundStartTime: null,
+  participant: {
+    id: "",
+    name: ""
+  },
   scanEnabled: false,
   records: [],
   scans: [],
@@ -70,6 +74,9 @@ const state = {
   tutorialLastFeedRight: 0,
   lastRoundSeconds: null,
   sortingAttributePairs: [],
+  lastSortingRuleSnapshot: null,
+  sessionSaved: false,
+  sessionSaveResult: null,
   countdownTimer: null,
   memoryTimer: null,
   transitionTimer: null
@@ -80,6 +87,9 @@ const TEXT = {
     gameTitle: "Kitten<br />Nibbles",
     start: "Start",
     pressStart: "Press start to play",
+    participantId: "Participant ID",
+    participantName: "Name",
+    participantHint: "Enter participant details before starting.",
     tutorial: "Tutorial",
     hungry: "The cats are hungry.",
     tutorialLine1: "Put a token into a hole to feed the cat.",
@@ -116,12 +126,20 @@ const TEXT = {
     score: "Score",
     accuracy: "Accuracy",
     activeTime: "Active time",
-    home: "Home"
+    home: "Home",
+    databaseSaved: "Session saved",
+    databaseSaving: "Saving session...",
+    databaseError: "Database save failed",
+    monitoringStatus: "Monitoring status",
+    flagReason: "Flag reason"
   },
   zh: {
     gameTitle: "小猫<br />吃吃",
     start: "开始",
     pressStart: "按开始进入游戏",
+    participantId: "参与者编号",
+    participantName: "姓名",
+    participantHint: "请先输入参与者资料。",
     tutorial: "教程",
     hungry: "小猫饿了。",
     tutorialLine1: "把代币放进洞里喂小猫。",
@@ -158,7 +176,12 @@ const TEXT = {
     score: "分数",
     accuracy: "正确率",
     activeTime: "游戏时间",
-    home: "首页"
+    home: "首页",
+    databaseSaved: "记录已保存",
+    databaseSaving: "正在保存记录...",
+    databaseError: "数据库保存失败",
+    monitoringStatus: "监测状态",
+    flagReason: "标记原因"
   }
 };
 
@@ -200,6 +223,7 @@ function toggleLanguage() {
     return;
   }
 
+  cacheParticipantForm();
   state.language = state.language === "en" ? "zh" : "en";
   renderHome();
 }
@@ -301,6 +325,21 @@ async function startTutorialSession() {
     return;
   }
 
+  const participant = readParticipantForm();
+
+  if (!participant) {
+    return;
+  }
+
+  try {
+    const saved = await window.orderStackApi.saveParticipant(participant);
+    state.participant.id = saved.participantId;
+    state.participant.name = saved.participantName;
+  } catch (error) {
+    addLog(`DATABASE ERROR: ${error.message}`);
+    return;
+  }
+
   resetSessionState();
   renderTutorial();
   await sendLedCommand("LED:OFF");
@@ -322,6 +361,9 @@ function resetSessionState() {
   state.tutorialLastFeedRight = 0;
   state.lastRoundSeconds = null;
   state.sortingAttributePairs = createSortingAttributePairs();
+  state.lastSortingRuleSnapshot = null;
+  state.sessionSaved = false;
+  state.sessionSaveResult = null;
   resetRecentScans();
 }
 
@@ -381,10 +423,20 @@ function createSortingRound() {
   state.sortingRoundIndex += 1;
   const attribute = state.sortingAttributePairs[Math.floor(state.sortingRoundIndex / 2)];
   const values = shuffle(attribute === "color" ? COLORS : SHAPES);
+  const blockNumber = Math.floor(state.sortingRoundIndex / 2) + 1;
+  const roundInBlock = (state.sortingRoundIndex % 2) + 1;
+  const isSwitchRound = roundInBlock === 1 && Boolean(state.lastSortingRuleSnapshot);
 
   return {
     mode: "SORTING",
     attribute,
+    sortingRoundNumber: state.sortingRoundIndex + 1,
+    blockNumber,
+    roundInBlock,
+    isSwitchRound,
+    previousRule: isSwitchRound ? state.lastSortingRuleSnapshot : null,
+    lastTrialTimestamp: null,
+    trials: [],
     holes: {
       LEFT: { expected: values[0], target: randomInteger(1, 4), count: 0 },
       RIGHT: { expected: values[1], target: randomInteger(1, 4), count: 0 }
@@ -455,6 +507,11 @@ function startMemoryInput() {
 
 async function startActiveTimerAndScanning() {
   state.roundStartTime = performance.now();
+
+  if (state.currentRound.mode === "SORTING") {
+    state.currentRound.lastTrialTimestamp = state.roundStartTime;
+  }
+
   const scanMode = state.currentRound.mode === "MEMORY"
     ? state.currentRound.hole
     : "BOTH";
@@ -619,7 +676,28 @@ function receiveScan(hole, uid) {
     expected = holeState.expected;
     actual = tag ? tag[round.attribute] : "UNKNOWN";
     correct = actual === expected;
+    const expectedHole = expectedHoleForCurrentRule(round, tag);
+    const previousExpectedHole = round.isSwitchRound
+      ? expectedHoleForSnapshot(round.previousRule, tag)
+      : null;
+    const reactionTimeMs = timestamp - (round.lastTrialTimestamp || state.roundStartTime || timestamp);
+    const isPerseverativeError = Boolean(!correct && previousExpectedHole && previousExpectedHole === hole);
+
+    round.lastTrialTimestamp = timestamp;
     holeState.count += 1;
+    round.trials.push({
+      blockNumber: round.blockNumber,
+      ruleType: round.attribute,
+      previousRuleType: round.previousRule?.attribute || null,
+      isSwitchTrial: round.isSwitchRound,
+      tokenColor: tag?.color || null,
+      tokenShape: tag?.shape || null,
+      expectedHole,
+      placedHole: hole,
+      reactionTimeMs,
+      isCorrect: correct,
+      isPerseverativeError
+    });
     renderSorting();
     animateCat(hole === "LEFT" ? "left-cat" : "right-cat", tag?.shape || "SQUARE");
     roundComplete = Object.values(round.holes).every((item) => item.count >= item.target);
@@ -637,7 +715,17 @@ function receiveScan(hole, uid) {
     uid,
     expected,
     actual,
-    correct
+    correct,
+    reactionTimeMs: round.mode === "SORTING" ? round.trials.at(-1)?.reactionTimeMs || 0 : null,
+    expectedHole: round.mode === "SORTING" ? round.trials.at(-1)?.expectedHole || null : null,
+    placedHole: round.mode === "SORTING" ? hole : null,
+    blockNumber: round.mode === "SORTING" ? round.blockNumber : null,
+    ruleType: round.mode === "SORTING" ? round.attribute : null,
+    previousRuleType: round.mode === "SORTING" ? round.previousRule?.attribute || null : null,
+    isSwitchTrial: round.mode === "SORTING" ? round.isSwitchRound : false,
+    isPerseverativeError: round.mode === "SORTING" ? round.trials.at(-1)?.isPerseverativeError || false : false,
+    tokenColor: tag?.color || null,
+    tokenShape: tag?.shape || null
   });
 
   if (roundComplete) {
@@ -663,7 +751,12 @@ async function completeRound(timestamp) {
     attribute: state.currentRound.attribute,
     seconds,
     correct: roundScans.filter((scan) => scan.correct).length,
-    total: roundScans.length
+    total: roundScans.length,
+    sortingRoundNumber: state.currentRound.sortingRoundNumber || null,
+    blockNumber: state.currentRound.blockNumber || null,
+    roundInBlock: state.currentRound.roundInBlock || null,
+    switchFromRule: state.currentRound.previousRule?.attribute || null,
+    isSwitchRound: Boolean(state.currentRound.isSwitchRound)
   });
 
   await delay(RESULT_LED_DELAY_MS);
@@ -677,6 +770,7 @@ async function completeRound(timestamp) {
   }
 
   state.phase = "SORTING_COMPLETE";
+  state.lastSortingRuleSnapshot = snapshotSortingRule(state.currentRound);
   renderSortingComplete();
 }
 
@@ -697,6 +791,17 @@ function renderHome() {
       </div>
       <div class="home-hero">
         <h1 class="title">${t("gameTitle")}</h1>
+        <form id="participant-form" class="participant-form panel">
+          <p>${t("participantHint")}</p>
+          <label>
+            <span>${t("participantId")}</span>
+            <input id="participant-id-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.id)}" />
+          </label>
+          <label>
+            <span>${t("participantName")}</span>
+            <input id="participant-name-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.name)}" />
+          </label>
+        </form>
         <div class="hero-cat-wrap">
           ${cat("hero-cat", "hero-cat")}
           <button id="start-cat-button" class="cat-start-button" type="button">${t("start")}</button>
@@ -705,6 +810,10 @@ function renderHome() {
       </div>
     </section>
   `;
+  document.querySelector("#participant-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    startTutorialSession();
+  });
   document.querySelector("#start-cat-button").addEventListener("click", startTutorialSession);
 }
 
@@ -964,6 +1073,7 @@ function renderFinalScreen() {
   const accuracy = total ? Math.round((correct / total) * 100) : 0;
   const totalSeconds = state.records.reduce((sum, record) => sum + record.seconds, 0);
   const score = Math.round((accuracy / 100) * 800 + Math.min(200, 15000 / Math.max(totalSeconds, 1)));
+  const sessionPayload = buildSessionPayload(score, accuracy, totalSeconds);
   const rows = state.records.map((record) => `
     <tr>
       <td>${record.round}</td>
@@ -985,9 +1095,18 @@ function renderFinalScreen() {
           <div><span>${t("accuracy")}</span><strong>${accuracy}%</strong></div>
           <div><span>${t("activeTime")}</span><strong>${formatDuration(totalSeconds)}</strong></div>
         </div>
+        <div id="database-status" class="database-status">${t("databaseSaving")}</div>
         <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
         <details class="results-details">
           <summary>Staff results</summary>
+          <div class="staff-metrics">
+            <p><strong>Participant:</strong> ${escapeHtml(sessionPayload.participant.participantId)}</p>
+            <p><strong>Game 1 accuracy:</strong> ${sessionPayload.game1Accuracy.toFixed(1)}%</p>
+            <p><strong>Game 2 accuracy:</strong> ${sessionPayload.game2Accuracy.toFixed(1)}%</p>
+            <p><strong>Switch RT cost:</strong> ${(sessionPayload.executiveMetrics.switchRtCostMs / 1000).toFixed(2)}s</p>
+            <p><strong>Switch error cost:</strong> ${sessionPayload.executiveMetrics.switchErrorCost.toFixed(1)} points</p>
+            <p><strong>Perseverative errors:</strong> ${sessionPayload.executiveMetrics.perseverativeErrors}</p>
+          </div>
           <table>
             <thead><tr><th>Round</th><th>Mode</th><th>Accuracy</th><th>Time</th></tr></thead>
             <tbody>${rows}</tbody>
@@ -999,6 +1118,7 @@ function renderFinalScreen() {
     </section>
   `;
   document.querySelector("#home-button").addEventListener("click", goHome);
+  saveCompletedSession(sessionPayload);
 }
 
 function renderTokenBox(value, attribute, scanned = false) {
@@ -1027,6 +1147,271 @@ function renderRuleTile(value, attribute) {
       ${tokenContent(value, attribute)}
     </div>
   `;
+}
+
+function readParticipantForm() {
+  cacheParticipantForm();
+  const idInput = document.querySelector("#participant-id-input");
+  const participantId = state.participant.id;
+  const participantName = state.participant.name || participantId;
+
+  if (!participantId) {
+    addLog("Participant ID is required before starting.");
+    idInput?.focus();
+    return null;
+  }
+
+  state.participant.id = participantId;
+  state.participant.name = participantName;
+
+  return {
+    participantId,
+    participantName
+  };
+}
+
+function cacheParticipantForm() {
+  const idInput = document.querySelector("#participant-id-input");
+  const nameInput = document.querySelector("#participant-name-input");
+
+  if (idInput) {
+    state.participant.id = idInput.value.trim();
+  }
+
+  if (nameInput) {
+    state.participant.name = nameInput.value.trim();
+  }
+}
+
+function expectedHoleForCurrentRule(round, tag) {
+  if (!tag) {
+    return null;
+  }
+
+  const value = tag[round.attribute];
+
+  if (round.holes.LEFT.expected === value) {
+    return "LEFT";
+  }
+
+  if (round.holes.RIGHT.expected === value) {
+    return "RIGHT";
+  }
+
+  return null;
+}
+
+function expectedHoleForSnapshot(snapshot, tag) {
+  if (!snapshot || !tag) {
+    return null;
+  }
+
+  const value = tag[snapshot.attribute];
+
+  if (snapshot.holes.LEFT === value) {
+    return "LEFT";
+  }
+
+  if (snapshot.holes.RIGHT === value) {
+    return "RIGHT";
+  }
+
+  return null;
+}
+
+function snapshotSortingRule(round) {
+  return {
+    attribute: round.attribute,
+    holes: {
+      LEFT: round.holes.LEFT.expected,
+      RIGHT: round.holes.RIGHT.expected
+    }
+  };
+}
+
+function buildSessionPayload(score, accuracy, totalSeconds) {
+  const game1Scans = state.scans.filter((scan) => scan.mode === "MEMORY");
+  const game2Scans = state.scans.filter((scan) => scan.mode === "SORTING");
+  const game2Trials = buildGame2Trials(game2Scans);
+  const game2Blocks = buildGame2Blocks(game2Trials);
+
+  return {
+    participant: {
+      participantId: state.participant.id,
+      participantName: state.participant.name || state.participant.id
+    },
+    totalScore: score,
+    totalAccuracy: accuracy,
+    totalGameTimeMs: Math.round(totalSeconds * 1000),
+    game1Accuracy: accuracyForScans(game1Scans),
+    game2Accuracy: accuracyForScans(game2Scans),
+    executiveMetrics: buildExecutiveMetrics(game2Trials, game2Blocks),
+    game2Blocks,
+    game2Trials,
+    dataQualityFlag: "valid"
+  };
+}
+
+function buildGame2Trials(game2Scans) {
+  return game2Scans.map((scan, index) => ({
+    trialNumber: index + 1,
+    blockNumber: scan.blockNumber || 0,
+    ruleType: scan.ruleType || scan.attribute || "",
+    previousRuleType: scan.previousRuleType || null,
+    isSwitchTrial: Boolean(scan.isSwitchTrial),
+    tokenColor: scan.tokenColor || null,
+    tokenShape: scan.tokenShape || null,
+    expectedHole: scan.expectedHole || null,
+    placedHole: scan.placedHole || scan.hole,
+    reactionTimeMs: Math.max(0, Math.round(scan.reactionTimeMs || 0)),
+    isCorrect: Boolean(scan.correct),
+    isPerseverativeError: Boolean(scan.isPerseverativeError)
+  }));
+}
+
+function buildGame2Blocks(game2Trials) {
+  const sortingRecords = state.records.filter((record) => record.mode === "SORTING");
+  const blocks = [];
+
+  for (let blockNumber = 1; blockNumber <= 3; blockNumber++) {
+    const round1 = sortingRecords.find((record) => record.blockNumber === blockNumber && record.roundInBlock === 1);
+    const round2 = sortingRecords.find((record) => record.blockNumber === blockNumber && record.roundInBlock === 2);
+
+    if (!round1 || !round2) {
+      continue;
+    }
+
+    const previousBlockRound2 = sortingRecords.find((record) => (
+      record.blockNumber === blockNumber - 1 &&
+      record.roundInBlock === 2
+    ));
+    const blockTrials = game2Trials.filter((trial) => trial.blockNumber === blockNumber);
+    const round1ErrorRate = errorRateFromCounts(round1.correct, round1.total);
+    const previousErrorRate = previousBlockRound2
+      ? errorRateFromCounts(previousBlockRound2.correct, previousBlockRound2.total)
+      : round1ErrorRate;
+    const round1Rate = timePerTokenMs(round1);
+    const round2Rate = timePerTokenMs(round2);
+    const previousRate = previousBlockRound2 ? timePerTokenMs(previousBlockRound2) : round1Rate;
+    const totalCorrect = round1.correct + round2.correct;
+    const totalScans = round1.total + round2.total;
+
+    blocks.push({
+      blockNumber,
+      ruleType: round1.attribute,
+      switchFromRule: round1.switchFromRule || null,
+      round1TimeMs: Math.round(round1.seconds * 1000),
+      round2TimeMs: Math.round(round2.seconds * 1000),
+      round1TokenTotal: round1.total,
+      round2TokenTotal: round2.total,
+      blockAccuracy: totalScans ? (totalCorrect / totalScans) * 100 : 0,
+      switchCostMs: round1.switchFromRule ? round1Rate - previousRate : 0,
+      switchErrorCost: round1.switchFromRule ? (round1ErrorRate - previousErrorRate) * 100 : 0,
+      adaptationCostMs: round1Rate - round2Rate,
+      perseverativeErrorCount: blockTrials.filter((trial) => trial.isPerseverativeError).length
+    });
+  }
+
+  return blocks;
+}
+
+function buildExecutiveMetrics(game2Trials, game2Blocks) {
+  const switchTrials = game2Trials.filter((trial) => trial.isSwitchTrial);
+  const repeatTrials = game2Trials.filter((trial) => !trial.isSwitchTrial);
+  const switchRt = averageReactionTime(switchTrials);
+  const repeatRt = averageReactionTime(repeatTrials);
+  const switchErrorCost = (errorRate(switchTrials) - errorRate(repeatTrials)) * 100;
+  const switchedBlocks = game2Blocks.filter((block) => block.switchFromRule);
+
+  return {
+    switchRtCostMs: switchRt - repeatRt,
+    switchErrorCost,
+    perseverativeErrors: game2Trials.filter((trial) => trial.isPerseverativeError).length,
+    adaptationCostMs: average(switchedBlocks.map((block) => block.adaptationCostMs))
+  };
+}
+
+async function saveCompletedSession(sessionPayload) {
+  if (state.sessionSaved) {
+    return;
+  }
+
+  state.sessionSaved = true;
+
+  try {
+    const result = await window.orderStackApi.saveGameSession(sessionPayload);
+    state.sessionSaveResult = result;
+    updateDatabaseStatus(result);
+    addLog(`DATABASE SAVED: ${result.sessionId}`);
+  } catch (error) {
+    state.sessionSaved = false;
+    updateDatabaseStatus(null, error);
+    addLog(`DATABASE ERROR: ${error.message}`);
+  }
+}
+
+function updateDatabaseStatus(result, error = null) {
+  const status = document.querySelector("#database-status");
+
+  if (!status) {
+    return;
+  }
+
+  if (error) {
+    status.classList.add("database-error");
+    status.textContent = `${t("databaseError")}: ${error.message}`;
+    return;
+  }
+
+  status.classList.remove("database-error");
+  status.innerHTML = `
+    <strong>${t("databaseSaved")}</strong>
+    <span>${t("monitoringStatus")}: ${escapeHtml(result.monitoringStatus)}</span>
+    <span>${t("flagReason")}: ${escapeHtml(result.flagReason)}</span>
+  `;
+}
+
+function timePerTokenMs(record) {
+  return record.total > 0 ? (record.seconds * 1000) / record.total : 0;
+}
+
+function accuracyForScans(scans) {
+  if (!scans.length) {
+    return 0;
+  }
+
+  return (scans.filter((scan) => scan.correct).length / scans.length) * 100;
+}
+
+function errorRate(trials) {
+  if (!trials.length) {
+    return 0;
+  }
+
+  return trials.filter((trial) => !trial.isCorrect).length / trials.length;
+}
+
+function errorRateFromCounts(correct, total) {
+  return total > 0 ? (total - correct) / total : 0;
+}
+
+function averageReactionTime(trials) {
+  const correctTrials = trials.filter((trial) => trial.isCorrect);
+  const values = (correctTrials.length ? correctTrials : trials)
+    .map((trial) => trial.reactionTimeMs)
+    .filter((value) => Number.isFinite(value));
+
+  return average(values);
+}
+
+function average(values) {
+  const filtered = values.filter((value) => Number.isFinite(value));
+
+  if (!filtered.length) {
+    return 0;
+  }
+
+  return filtered.reduce((sum, value) => sum + value, 0) / filtered.length;
 }
 
 function tokenContent(value, attribute) {
@@ -1207,6 +1592,15 @@ function formatDuration(seconds) {
   const minutes = Math.floor(seconds / 60);
   const remaining = Math.round(seconds % 60).toString().padStart(2, "0");
   return `${minutes}:${remaining}`;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function randomChoice(items) {

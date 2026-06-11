@@ -8,7 +8,7 @@
 #define PN532_MISO_PIN   5
 #define PN532_MOSI_PIN   6
 #define LEFT_SS_PIN      3
-#define RIGHT_SS_PIN     7
+#define RIGHT_SS_PIN     9
 
 // WS2812B NeoPixel strip, data on pin 9.
 #define LED_DATA_PIN     8

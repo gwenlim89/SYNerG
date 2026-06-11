@@ -2,9 +2,11 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const { SerialPort } = require("serialport");
 const { ReadlineParser } = require("@serialport/parser-readline");
+const database = require("./database");
 
 let mainWindow;
 let activePort;
+let databaseReady;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -24,7 +26,17 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  databaseReady = database.initDatabase();
+
+  try {
+    await databaseReady;
+  } catch (error) {
+    console.error("Database setup failed:", error);
+  }
+
+  createWindow();
+});
 
 app.on("window-all-closed", () => {
   closePort();
@@ -76,6 +88,26 @@ ipcMain.handle("serial:write", async (_event, text) => {
   });
 });
 
+ipcMain.handle("db:path", async () => {
+  await databaseReady;
+  return database.dbPath;
+});
+
+ipcMain.handle("db:list-participants", async () => {
+  await databaseReady;
+  return database.listParticipants();
+});
+
+ipcMain.handle("db:save-participant", async (_event, participant) => {
+  await databaseReady;
+  return database.saveParticipant(participant);
+});
+
+ipcMain.handle("db:save-game-session", async (_event, payload) => {
+  await databaseReady;
+  return database.saveGameSession(payload);
+});
+
 async function closePort() {
   if (!activePort?.isOpen) {
     activePort = null;
@@ -92,4 +124,3 @@ function send(channel, payload) {
     mainWindow.webContents.send(channel, payload);
   }
 }
-
