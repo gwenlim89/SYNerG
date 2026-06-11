@@ -8,24 +8,46 @@ const MEMORY_LENGTHS = [3, 3, 4, 5, 5, 6];
 const SORTING_ROUNDS = 6;
 const TOTAL_ROUNDS = MEMORY_LENGTHS.length + SORTING_ROUNDS;
 
-const COLORS = ["YELLOW", "PURPLE", "BLUE", "RED", "GREEN"];
-const SHAPES = ["SQUARE", "TRIANGLE", "PENTAGON", "HEXAGON", "OVAL"];
+const COLORS = ["RED", "BLUE", "YELLOW"];
+const SHAPES = ["CIRCLE", "SQUARE", "STAR", "HEXAGON", "HEART", "TRIANGLE"];
 const TAGS = {
-  "53:79:79:74:95:00:01": { name: "Blue triangle 1", color: "BLUE", shape: "TRIANGLE" },
-  "53:4B:8C:74:95:00:01": { name: "Blue triangle 2", color: "BLUE", shape: "TRIANGLE" },
-  "53:A6:80:74:95:00:01": { name: "Blue triangle 3", color: "BLUE", shape: "TRIANGLE" },
-  "53:F2:7D:74:95:00:01": { name: "Yellow square 1", color: "YELLOW", shape: "SQUARE" },
-  "53:23:96:74:95:00:01": { name: "Yellow square 2", color: "YELLOW", shape: "SQUARE" },
-  "53:87:6F:74:95:00:01": { name: "Yellow square 3", color: "YELLOW", shape: "SQUARE" },
-  "53:DB:35:74:95:00:01": { name: "Green oval 1", color: "GREEN", shape: "OVAL" },
-  "53:0C:3D:74:95:00:01": { name: "Green oval 2", color: "GREEN", shape: "OVAL" },
-  "53:92:38:74:95:00:01": { name: "Green oval 3", color: "GREEN", shape: "OVAL" },
-  "53:59:68:74:95:00:01": { name: "Red hexagon 1", color: "RED", shape: "HEXAGON" },
-  "53:67:55:74:95:00:01": { name: "Red hexagon 2", color: "RED", shape: "HEXAGON" },
-  "53:A1:5C:74:95:00:01": { name: "Red hexagon 3", color: "RED", shape: "HEXAGON" },
-  "53:49:44:74:95:00:01": { name: "Purple pentagon 1", color: "PURPLE", shape: "PENTAGON" },
-  "53:4E:9D:74:95:00:01": { name: "Purple pentagon 2", color: "PURPLE", shape: "PENTAGON" },
-  "53:78:4B:74:95:00:01": { name: "Purple pentagon 3", color: "PURPLE", shape: "PENTAGON" }
+  "53:9D:80:74:95:00:01": { name: "Blue circle 1",    color: "BLUE",   shape: "CIRCLE"   },
+  "53:9D:9A:74:95:00:01": { name: "Blue circle 2",    color: "BLUE",   shape: "CIRCLE"   },
+  "53:AE:D2:75:95:00:01": { name: "Blue circle 3",    color: "BLUE",   shape: "CIRCLE"   },
+  "53:46:44:74:95:00:01": { name: "Blue square 1",    color: "BLUE",   shape: "SQUARE"   },
+  "53:CD:87:74:95:00:01": { name: "Blue square 2",    color: "BLUE",   shape: "SQUARE"   },
+  "53:56:68:74:95:00:01": { name: "Blue triangle 1",  color: "BLUE",   shape: "TRIANGLE" },
+  "53:54:8C:74:95:00:01": { name: "Blue triangle 2",  color: "BLUE",   shape: "TRIANGLE" },
+  "53:B5:52:74:95:00:01": { name: "Blue triangle 3",  color: "BLUE",   shape: "TRIANGLE" },
+  "53:E4:59:74:95:00:01": { name: "Blue heart 1",     color: "BLUE",   shape: "HEART"    },
+  "53:6C:A4:74:95:00:01": { name: "Blue heart 2",     color: "BLUE",   shape: "HEART"    },
+  "53:64:55:74:95:00:01": { name: "Blue heart 3",     color: "BLUE",   shape: "HEART"    },
+  "53:98:5C:74:95:00:01": { name: "Blue star 1",      color: "BLUE",   shape: "STAR"     },
+  "53:D0:63:74:95:00:01": { name: "Blue star 2",      color: "BLUE",   shape: "STAR"     },
+  "53:7F:4B:74:95:00:01": { name: "Blue hexagon 1",   color: "BLUE",   shape: "HEXAGON"  },
+  "53:5A:31:74:95:00:01": { name: "Yellow circle 1",  color: "YELLOW", shape: "CIRCLE"   },
+  "53:BF:76:74:95:00:01": { name: "Yellow circle 2",  color: "YELLOW", shape: "CIRCLE"   },
+  "53:F7:46:74:95:00:01": { name: "Yellow square 1",  color: "YELLOW", shape: "SQUARE"   },
+  "53:8D:6F:74:95:00:01": { name: "Yellow square 2",  color: "YELLOW", shape: "SQUARE"   },
+  "53:80:AB:74:95:00:01": { name: "Yellow triangle 1",color: "YELLOW", shape: "TRIANGLE" },
+  "53:72:79:74:95:00:01": { name: "Yellow triangle 2",color: "YELLOW", shape: "TRIANGLE" },
+  "53:A8:80:74:95:00:01": { name: "Yellow heart 1",   color: "YELLOW", shape: "HEART"    },
+  "53:C3:3F:74:95:00:01": { name: "Yellow heart 2",   color: "YELLOW", shape: "HEART"    },
+  "53:89:38:74:95:00:01": { name: "Yellow star 1",    color: "YELLOW", shape: "STAR"     },
+  "53:72:93:74:95:00:01": { name: "Yellow star 2",    color: "YELLOW", shape: "STAR"     },
+  "53:DA:35:74:95:00:01": { name: "Yellow hexagon 1", color: "YELLOW", shape: "HEXAGON"  },
+  "53:B4:52:74:95:00:01": { name: "Red circle 1",     color: "RED",    shape: "CIRCLE"   },
+  "53:C0:A1:74:95:00:01": { name: "Red circle 2",     color: "RED",    shape: "CIRCLE"   },
+  "53:9A:B2:74:95:00:01": { name: "Red square 1",     color: "RED",    shape: "SQUARE"   },
+  "53:D1:87:74:95:00:01": { name: "Red square 2",     color: "RED",    shape: "SQUARE"   },
+  "53:E5:59:74:95:00:01": { name: "Red triangle 1",   color: "RED",    shape: "TRIANGLE" },
+  "53:F3:8E:74:95:00:01": { name: "Red triangle 2",   color: "RED",    shape: "TRIANGLE" },
+  "53:C3:76:74:95:00:01": { name: "Red heart 1",      color: "RED",    shape: "HEART"    },
+  "53:A3:9A:74:95:00:01": { name: "Red heart 2",      color: "RED",    shape: "HEART"    },
+  "53:F4:7D:74:95:00:01": { name: "Red star 1",       color: "RED",    shape: "STAR"     },
+  "53:D4:63:74:95:00:01": { name: "Red star 2",       color: "RED",    shape: "STAR"     },
+  "53:08:6B:74:95:00:01": { name: "Red hexagon 1",    color: "RED",    shape: "HEXAGON"  },
+  "53:86:AB:74:95:00:01": { name: "Red hexagon 2",    color: "RED",    shape: "HEXAGON"  }
 };
 
 const elements = {
@@ -45,7 +67,14 @@ const elements = {
   clearLogButton: document.querySelector("#clear-log-button"),
   logList: document.querySelector("#log-list"),
   haloLeft: document.querySelector("#halo-left"),
-  haloRight: document.querySelector("#halo-right")
+  haloRight: document.querySelector("#halo-right"),
+  regScanButton: document.querySelector("#reg-scan-button"),
+  regLastUid: document.querySelector("#reg-last-uid"),
+  regColorSelect: document.querySelector("#reg-color-select"),
+  regShapeSelect: document.querySelector("#reg-shape-select"),
+  regAssignButton: document.querySelector("#reg-assign-button"),
+  regList: document.querySelector("#reg-list"),
+  regCopyButton: document.querySelector("#reg-copy-button")
 };
 
 const state = {
@@ -79,7 +108,10 @@ const state = {
   sessionSaveResult: null,
   countdownTimer: null,
   memoryTimer: null,
-  transitionTimer: null
+  transitionTimer: null,
+  regScanEnabled: false,
+  regLastUid: null,
+  registeredTags: {}
 };
 
 const TEXT = {
@@ -197,6 +229,9 @@ elements.connectButton.addEventListener("click", connectMcu);
 elements.clearLogButton.addEventListener("click", () => {
   elements.logList.innerHTML = "";
 });
+elements.regScanButton.addEventListener("click", toggleRegScan);
+elements.regAssignButton.addEventListener("click", registerToken);
+elements.regCopyButton.addEventListener("click", copyTagsCode);
 
 window.orderStackApi.onLine((line) => {
   addLog(line);
@@ -275,11 +310,20 @@ function handleSerialLine(line) {
     return;
   }
 
-  if (!line.startsWith("SCAN|") || !state.scanEnabled) {
+  if (!line.startsWith("SCAN|")) {
     return;
   }
 
   const fields = parseFields(line);
+
+  if (state.regScanEnabled && !state.scanEnabled) {
+    handleRegScan(fields.UID);
+    return;
+  }
+
+  if (!state.scanEnabled) {
+    return;
+  }
 
   if (state.phase === "TUTORIAL") {
     handleTutorialScan(fields.HOLE, fields.UID);
@@ -774,6 +818,82 @@ async function completeRound(timestamp) {
   renderSortingComplete();
 }
 
+async function toggleRegScan() {
+  if (!state.connected) {
+    addLog("Connect MCU before scanning.");
+    return;
+  }
+
+  state.regScanEnabled = !state.regScanEnabled;
+  elements.regScanButton.textContent = state.regScanEnabled ? "Stop Scanning" : "Start Scanning";
+
+  if (!state.scanEnabled) {
+    try {
+      await window.orderStackApi.write(state.regScanEnabled ? "SCAN:BOTH\n" : "SCAN:OFF\n");
+    } catch (e) {
+      addLog(`REG SCAN ERROR: ${e.message}`);
+    }
+  }
+}
+
+function handleRegScan(uid) {
+  if (!uid) {
+    return;
+  }
+
+  state.regLastUid = uid;
+  elements.regLastUid.textContent = uid;
+  elements.regAssignButton.disabled = false;
+  addLog(`REG SCAN: ${uid}`);
+}
+
+function registerToken() {
+  const uid = state.regLastUid;
+  const color = elements.regColorSelect.value;
+  const shape = elements.regShapeSelect.value;
+
+  if (!uid || !color || !shape) {
+    addLog("Select a color and shape before registering.");
+    return;
+  }
+
+  const count = Object.values(state.registeredTags)
+    .filter((t) => t.color === color && t.shape === shape).length + 1;
+  const name = `${color.charAt(0)}${color.slice(1).toLowerCase()} ${shape.charAt(0)}${shape.slice(1).toLowerCase()} ${count}`;
+
+  state.registeredTags[uid] = { name, color, shape };
+  renderRegList();
+
+  elements.regLastUid.textContent = "—";
+  elements.regAssignButton.disabled = true;
+  state.regLastUid = null;
+  addLog(`REGISTERED: ${name} → ${uid}`);
+}
+
+function renderRegList() {
+  elements.regList.innerHTML = Object.entries(state.registeredTags).map(([uid, tag]) =>
+    `<li class="reg-item"><code>${uid}</code> — ${tag.name}</li>`
+  ).join("");
+}
+
+function copyTagsCode() {
+  const entries = Object.entries(state.registeredTags);
+
+  if (entries.length === 0) {
+    addLog("No tokens registered yet.");
+    return;
+  }
+
+  const lines = entries.map(([uid, tag]) =>
+    `  "${uid}": { name: "${tag.name}", color: "${tag.color}", shape: "${tag.shape}" }`
+  );
+  const code = `const TAGS = {\n${lines.join(",\n")}\n};`;
+
+  navigator.clipboard.writeText(code).then(() => {
+    addLog("TAGS code copied to clipboard — paste it into renderer.js.");
+  });
+}
+
 function renderHome() {
   state.phase = "HOME";
   clearTimers();
@@ -785,9 +905,9 @@ function renderHome() {
       <div class="shape-forest" aria-hidden="true">
         ${shapeTree("TRIANGLE", "tree-one")}
         ${shapeTree("SQUARE", "tree-two")}
-        ${shapeTree("OVAL", "tree-three")}
+        ${shapeTree("CIRCLE", "tree-three")}
         ${shapeTree("HEXAGON", "tree-four")}
-        ${shapeTree("PENTAGON", "tree-five")}
+        ${shapeTree("HEART", "tree-five")}
       </div>
       <div class="home-hero">
         <h1 class="title">${t("gameTitle")}</h1>
@@ -1522,9 +1642,10 @@ function cat(extraClass = "", id = "") {
       <g class="snack-token">
         <path class="snack-piece snack-triangle" d="M111 -36 L132 -2 L90 -2 Z"></path>
         <rect class="snack-piece snack-square" x="93" y="-34" width="36" height="36"></rect>
-        <ellipse class="snack-piece snack-oval" cx="111" cy="-16" rx="23" ry="16"></ellipse>
+        <circle class="snack-piece snack-circle" cx="111" cy="-16" r="18"></circle>
         <path class="snack-piece snack-hexagon" d="M98 -34 L124 -34 L138 -16 L124 2 L98 2 L84 -16 Z"></path>
-        <path class="snack-piece snack-pentagon" d="M111 -38 L136 -20 L126 5 L96 5 L86 -20 Z"></path>
+        <polygon class="snack-piece snack-star" points="111,-36 116,-23 131,-22 120,-13 123,0 111,-7 99,0 102,-13 91,-22 106,-23"></polygon>
+        <path class="snack-piece snack-heart" d="M111,2 C90,-4 84,-34 97,-38 C107,-40 111,-28 111,-28 C111,-28 115,-40 125,-38 C138,-34 132,-4 111,2 Z"></path>
       </g>
       <g class="cat-shadow">
         <ellipse cx="108" cy="238" rx="78" ry="13"></ellipse>
@@ -1561,7 +1682,7 @@ function animateCat(id, shape = "SQUARE") {
     return;
   }
 
-  catElement.classList.remove("snack-triangle", "snack-square", "snack-oval", "snack-hexagon", "snack-pentagon");
+  catElement.classList.remove("snack-triangle", "snack-square", "snack-circle", "snack-hexagon", "snack-star", "snack-heart");
   catElement.classList.remove("eating");
   void catElement.getBoundingClientRect();
   catElement.classList.add(`snack-${shape.toLowerCase()}`);

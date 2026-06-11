@@ -12,11 +12,11 @@
 
 // WS2812B NeoPixel strip, data on pin 9.
 #define LED_DATA_PIN     8
-#define NUM_LEDS         16
-#define LEFT_LED_START   8
-#define LEFT_LED_END     16
+#define NUM_LEDS         8
+#define LEFT_LED_START   4
+#define LEFT_LED_END     8
 #define RIGHT_LED_START  0
-#define RIGHT_LED_END    8
+#define RIGHT_LED_END    4
 #define SCAN_FLASH_MS    350
 #define RESULT_MS        1600
 #define SAME_UID_COOLDOWN_MS 1200

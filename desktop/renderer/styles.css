@@ -439,10 +439,10 @@ button {
   background: var(--yellow);
 }
 
-.shape-fruit.oval,
-.shape.oval {
+.shape-fruit.circle,
+.shape.circle {
   background: var(--green);
-  border-radius: 999px;
+  border-radius: 50%;
 }
 
 .shape-fruit.hexagon,
@@ -451,10 +451,16 @@ button {
   clip-path: polygon(25% 5%, 75% 5%, 98% 50%, 75% 95%, 25% 95%, 2% 50%);
 }
 
-.shape-fruit.pentagon,
-.shape.pentagon {
+.shape-fruit.star,
+.shape.star {
   background: var(--purple);
-  clip-path: polygon(50% 4%, 96% 38%, 78% 95%, 22% 95%, 4% 38%);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+.shape-fruit.heart,
+.shape.heart {
+  background: var(--pink);
+  clip-path: polygon(50% 100%, 5% 45%, 2% 30%, 5% 15%, 20% 2%, 38% 5%, 50% 18%, 62% 5%, 80% 2%, 95% 15%, 98% 30%, 95% 45%);
 }
 
 .fruit-one {
@@ -1371,7 +1377,7 @@ td {
   fill: var(--yellow);
 }
 
-.pixel-cat.snack-oval .snack-piece.snack-oval {
+.pixel-cat.snack-circle .snack-piece.snack-circle {
   display: block;
   fill: var(--green);
 }
@@ -1381,9 +1387,14 @@ td {
   fill: var(--red);
 }
 
-.pixel-cat.snack-pentagon .snack-piece.snack-pentagon {
+.pixel-cat.snack-star .snack-piece.snack-star {
   display: block;
   fill: var(--purple);
+}
+
+.pixel-cat.snack-heart .snack-piece.snack-heart {
+  display: block;
+  fill: var(--pink);
 }
 
 .pixel-cat.eating .snack-token {
@@ -1470,6 +1481,59 @@ select {
   font-family: Menlo, Monaco, monospace;
   font-size: 0.88rem;
   line-height: 1.65;
+}
+
+.reg-section {
+  margin-top: 22px;
+  border-top: 3px solid #d5dde6;
+  padding-top: 14px;
+}
+
+.reg-scan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-weight: 900;
+}
+
+.reg-uid-display {
+  flex: 1;
+  padding: 6px 10px;
+  border: 3px solid var(--outline);
+  background: #ffffff;
+  font-family: Menlo, Monaco, monospace;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.reg-assign-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.reg-assign-row select {
+  flex: 1;
+  min-height: 44px;
+}
+
+.reg-list {
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 12px;
+  border: 3px solid #d5dde6;
+  background: #ffffff;
+  font-family: Menlo, Monaco, monospace;
+  font-size: 0.84rem;
+  line-height: 1.7;
+  padding: 6px 10px;
+}
+
+.reg-copy-button {
+  margin-top: 10px;
+  width: 100%;
 }
 
 @keyframes pixel-snack-drop {

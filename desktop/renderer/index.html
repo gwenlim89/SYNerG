@@ -59,6 +59,37 @@
           <button id="clear-log-button" class="secondary-button" type="button">Clear</button>
         </div>
         <ol id="log-list"></ol>
+
+        <div class="reg-section">
+          <div class="log-heading">
+            <h3>Token Registration</h3>
+            <button id="reg-scan-button" class="secondary-button" type="button">Start Scanning</button>
+          </div>
+          <div class="reg-scan-row">
+            <span>Last scanned UID:</span>
+            <code id="reg-last-uid" class="reg-uid-display">—</code>
+          </div>
+          <div class="reg-assign-row">
+            <select id="reg-color-select">
+              <option value="">Color…</option>
+              <option value="RED">Red</option>
+              <option value="BLUE">Blue</option>
+              <option value="YELLOW">Yellow</option>
+            </select>
+            <select id="reg-shape-select">
+              <option value="">Shape…</option>
+              <option value="CIRCLE">Circle</option>
+              <option value="SQUARE">Square</option>
+              <option value="STAR">Star</option>
+              <option value="HEXAGON">Hexagon</option>
+              <option value="HEART">Heart</option>
+              <option value="TRIANGLE">Triangle</option>
+            </select>
+            <button id="reg-assign-button" class="secondary-button" type="button" disabled>Register</button>
+          </div>
+          <ol id="reg-list" class="reg-list"></ol>
+          <button id="reg-copy-button" class="secondary-button reg-copy-button" type="button">Copy TAGS code</button>
+        </div>
       </section>
     </main>
 
