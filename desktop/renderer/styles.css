@@ -248,7 +248,6 @@ button {
 }
 
 .home-screen,
-.tutorial-screen,
 .memory-screen,
 .sorting-screen,
 .final-screen,
@@ -300,17 +299,18 @@ button {
 
 .participant-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(170px, 1fr));
-  gap: 10px 14px;
-  width: min(620px, 78vw);
-  padding: 12px 16px 14px;
-  text-align: left;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 15px 21px;
+  width: min(930px, 78vw);
+  padding: 18px 24px 21px;
+  text-align: center;
 }
 
 .participant-form p {
   grid-column: 1 / -1;
   margin: 0;
-  font-size: 0.92rem;
+  font-size: 1.38rem;
   font-weight: 900;
   text-align: center;
   text-transform: uppercase;
@@ -318,25 +318,27 @@ button {
 
 .participant-form label {
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  width: 75%;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .participant-form span {
-  font-size: 0.78rem;
+  font-size: 1.17rem;
 }
 
 .participant-form input {
-  min-height: 38px;
+  min-height: 57px;
   width: 100%;
-  border: 4px solid var(--outline);
+  border: 6px solid var(--outline);
   border-radius: 0;
   background: #ffffff;
-  padding: 0 8px;
+  padding: 0 12px;
   color: var(--outline);
-  font-size: 1rem;
+  font-size: 1.5rem;
   font-weight: 900;
+  text-align: center;
 }
 
 .hero-cat-wrap {
@@ -522,124 +524,6 @@ button {
   box-shadow:
     2px 2px 0 rgba(0, 0, 0, 0.35),
     inset -5px -5px 0 rgba(0, 0, 0, 0.2);
-}
-
-.tutorial-screen {
-  display: grid;
-  grid-template-rows: auto auto auto auto;
-  min-height: 100%;
-  align-content: start;
-  align-items: center;
-  justify-items: center;
-  gap: 9px;
-  margin: -18px -12px 0;
-  text-align: center;
-}
-
-.tutorial-copy {
-  display: grid;
-  width: min(820px, 100%);
-  gap: 5px;
-  padding: 12px 22px;
-}
-
-.tutorial-copy .instruction-kicker {
-  color: #2f6fff;
-  font-size: 1.2rem;
-  text-shadow: none;
-}
-
-.tutorial-copy h2 {
-  margin: 0;
-  color: var(--outline);
-  font-size: clamp(1.75rem, 3vw, 2.55rem);
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.tutorial-copy p {
-  margin: 0;
-  color: var(--outline);
-  font-size: clamp(0.95rem, 1.55vw, 1.12rem);
-  font-weight: 900;
-  line-height: 1.25;
-}
-
-.tutorial-cats {
-  display: grid;
-  width: min(700px, 100%);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.tutorial-cat-card {
-  position: relative;
-  display: grid;
-  min-height: 212px;
-  justify-items: center;
-  gap: 3px;
-  padding: 10px 14px 8px;
-  overflow: hidden;
-}
-
-.tutorial-cat-wrap {
-  position: relative;
-  width: 164px;
-  height: 144px;
-}
-
-.tutorial-cat-card .pixel-cat {
-  left: 50%;
-  bottom: -6px;
-  width: 160px;
-  transform: translateX(-50%) scale(0.86);
-}
-
-.tutorial-light {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  width: 48px;
-  height: 26px;
-  border: 5px solid var(--outline);
-  background: #dce7f0;
-  box-shadow: 4px 4px 0 rgba(17, 24, 39, 0.18);
-}
-
-.tutorial-cat-card.blue-flash {
-  animation: tutorial-card-flash 850ms steps(4, end);
-}
-
-.tutorial-cat-card.blue-flash .tutorial-light {
-  background: #008cff;
-  box-shadow:
-    0 0 0 7px rgba(0, 140, 255, 0.22),
-    4px 4px 0 rgba(17, 24, 39, 0.18);
-}
-
-.tutorial-status {
-  display: inline-grid;
-  min-width: 102px;
-  min-height: 32px;
-  place-items: center;
-  border: 4px solid var(--outline);
-  background: #fffdf4;
-  color: var(--outline);
-  font-size: 0.9rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  box-shadow: 4px 4px 0 rgba(17, 24, 39, 0.16);
-}
-
-.tutorial-ok {
-  position: relative;
-  z-index: 8;
-  margin-top: 0;
-}
-
-.tutorial-ok.is-hidden {
-  visibility: hidden;
-  pointer-events: none;
 }
 
 .instruction-screen {
@@ -1593,15 +1477,6 @@ select {
   100% { opacity: 1; transform: scale(1); }
 }
 
-@keyframes tutorial-card-flash {
-  0%, 100% { box-shadow: 8px 8px 0 rgba(17, 24, 39, 0.22); }
-  35%, 72% {
-    box-shadow:
-      0 0 0 9px rgba(0, 140, 255, 0.22),
-      8px 8px 0 rgba(17, 24, 39, 0.22);
-  }
-}
-
 @keyframes cat-jump {
   0%, 100% { transform: translateY(0); }
   40% { transform: translateY(-34px); }
@@ -1622,8 +1497,7 @@ select {
     padding: 78px 38px 62px;
   }
 
-  .sorting-columns,
-  .tutorial-cats {
+  .sorting-columns {
     gap: 12px;
   }
 

@@ -103,6 +103,11 @@ ipcMain.handle("db:save-participant", async (_event, participant) => {
   return database.saveParticipant(participant);
 });
 
+ipcMain.handle("db:get-or-create-participant", async (_event, name) => {
+  await databaseReady;
+  return database.getOrCreateParticipant(name);
+});
+
 ipcMain.handle("db:save-game-session", async (_event, payload) => {
   await databaseReady;
   return database.saveGameSession(payload);

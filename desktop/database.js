@@ -124,6 +124,30 @@ function copyLegacyDatabaseIfNeeded(targetPath) {
   fs.copyFileSync(legacyPath, targetPath);
 }
 
+async function getOrCreateParticipant(name) {
+  const participantName = normalizeRequiredText(name, "participant_name");
+
+  const existing = await querySql(`
+    SELECT participant_id AS participantId,
+           participant_name AS participantName
+    FROM participants
+    WHERE LOWER(participant_name) = LOWER(${sqlText(participantName)})
+    LIMIT 1;
+  `);
+
+  if (existing[0]) {
+    return { participantId: existing[0].participantId, participantName: existing[0].participantName, dbPath };
+  }
+
+  const participantId = makeId("p");
+  await runSql(`
+    INSERT INTO participants (participant_id, participant_name)
+    VALUES (${sqlText(participantId)}, ${sqlText(participantName)});
+  `);
+
+  return { participantId, participantName, dbPath };
+}
+
 async function saveParticipant(participant) {
   const participantId = normalizeRequiredText(participant.participantId, "participant_id");
   const participantName = normalizeRequiredText(participant.participantName || participantId, "participant_name");
@@ -615,6 +639,7 @@ module.exports = {
   listParticipants,
   saveGameSession,
   saveParticipant,
+  getOrCreateParticipant,
   get dbPath() {
     return dbPath;
   }
