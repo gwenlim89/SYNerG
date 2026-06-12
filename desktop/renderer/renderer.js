@@ -80,6 +80,7 @@ const elements = {
 const state = {
   connected: false,
   language: "en",
+  playerMode: "single",
   phase: "HOME",
   roundIndex: -1,
   memoryRoundIndex: -1,
@@ -119,6 +120,17 @@ const TEXT = {
     gameTitle: "Kitten<br />Nibbles",
     start: "Start",
     pressStart: "Press start to play",
+    onePlayer: "1 Player",
+    twoPlayers: "2 Players",
+    playerMode: "Player mode",
+    leftPlayer: "Left Player",
+    rightPlayer: "Right Player",
+    winner: "Winner",
+    runnerUp: "Runner Up",
+    youWin: "You win!!",
+    betterLuck: "Better luck next time!",
+    keepFeeding: "Keep feeding!",
+    winnerRule: "Score uses accuracy first. Speed breaks a tie.",
     participantId: "Participant ID",
     participantName: "Name",
     participantHint: "Enter participant details before starting.",
@@ -169,6 +181,17 @@ const TEXT = {
     gameTitle: "小猫<br />吃吃",
     start: "开始",
     pressStart: "按开始进入游戏",
+    onePlayer: "单人",
+    twoPlayers: "双人",
+    playerMode: "玩家模式",
+    leftPlayer: "左边玩家",
+    rightPlayer: "右边玩家",
+    winner: "胜利",
+    runnerUp: "再接再厉",
+    youWin: "你赢了！！",
+    betterLuck: "下次加油！",
+    keepFeeding: "继续喂！",
+    winnerRule: "先看正确率；平手时看速度。",
     participantId: "参与者编号",
     participantName: "姓名",
     participantHint: "请先输入参与者资料。",
@@ -355,10 +378,16 @@ function handleRemovedLine(line) {
 
   if (
     state.currentRound?.mode === "MEMORY" &&
-    state.phase === "MEMORY_INPUT" &&
-    hole === state.currentRound.hole
+    state.phase === "MEMORY_INPUT"
   ) {
-    state.currentRound.lastAcceptedUid = null;
+    if (state.currentRound.players?.[hole]) {
+      state.currentRound.players[hole].lastAcceptedUid = null;
+      return;
+    }
+
+    if (hole === state.currentRound.hole) {
+      state.currentRound.lastAcceptedUid = null;
+    }
   }
 }
 
@@ -452,13 +481,31 @@ function createMemoryRound() {
   state.memoryRoundIndex += 1;
   const attribute = randomChoice(["color", "shape"]);
   const values = attribute === "color" ? COLORS : SHAPES;
-
-  return {
+  const round = {
     mode: "MEMORY",
     attribute,
-    hole: randomChoice(["LEFT", "RIGHT"]),
+    hole: state.playerMode === "two" ? "BOTH" : randomChoice(["LEFT", "RIGHT"]),
     expected: Array.from({ length: MEMORY_LENGTHS[state.memoryRoundIndex] }, () => randomChoice(values)),
     actual: [],
+    lastAcceptedUid: null
+  };
+
+  if (state.playerMode === "two") {
+    round.players = {
+      LEFT: createMemoryPlayer(),
+      RIGHT: createMemoryPlayer()
+    };
+  }
+
+  return round;
+}
+
+function createMemoryPlayer() {
+  return {
+    actual: [],
+    startedAt: null,
+    finishedAt: null,
+    elapsedMs: 0,
     lastAcceptedUid: null
   };
 }
@@ -470,6 +517,7 @@ function createSortingRound() {
   const blockNumber = Math.floor(state.sortingRoundIndex / 2) + 1;
   const roundInBlock = (state.sortingRoundIndex % 2) + 1;
   const isSwitchRound = roundInBlock === 1 && Boolean(state.lastSortingRuleSnapshot);
+  const sharedTarget = state.playerMode === "two" ? randomInteger(1, 4) : null;
 
   return {
     mode: "SORTING",
@@ -482,9 +530,20 @@ function createSortingRound() {
     lastTrialTimestamp: null,
     trials: [],
     holes: {
-      LEFT: { expected: values[0], target: randomInteger(1, 4), count: 0 },
-      RIGHT: { expected: values[1], target: randomInteger(1, 4), count: 0 }
+      LEFT: createSortingHole(values[0], sharedTarget),
+      RIGHT: createSortingHole(values[1], sharedTarget)
     }
+  };
+}
+
+function createSortingHole(expected, target = null) {
+  return {
+    expected,
+    target: target || randomInteger(1, 4),
+    count: 0,
+    startedAt: null,
+    finishedAt: null,
+    elapsedMs: 0
   };
 }
 
@@ -520,7 +579,10 @@ function beginCountdown() {
 async function startPlayableRound() {
   if (state.currentRound.mode === "MEMORY") {
     state.phase = "MEMORIZE";
-    await sendLedCommand(`LED:MEMORY:${state.currentRound.hole}`);
+    await sendLedCommand(state.playerMode === "two"
+      ? "LED:SORT:LEFT:YELLOW:RIGHT:YELLOW"
+      : `LED:MEMORY:${state.currentRound.hole}`
+    );
     let secondsRemaining = MEMORIZE_MS / 1000;
     renderMemory(secondsRemaining);
 
@@ -557,7 +619,7 @@ async function startActiveTimerAndScanning() {
   }
 
   const scanMode = state.currentRound.mode === "MEMORY"
-    ? state.currentRound.hole
+    ? (state.playerMode === "two" ? "BOTH" : state.currentRound.hole)
     : "BOTH";
   await setScanMode(scanMode);
 }
@@ -686,30 +748,70 @@ function receiveScan(hole, uid) {
   }
 
   if (round.mode === "MEMORY") {
-    if (hole !== round.hole) {
-      addLog(`IGNORED WRONG HOLE DURING MEMORY: ${hole}`);
-      return;
+    if (state.playerMode === "two" && round.players) {
+      const player = round.players[hole];
+
+      if (!player) {
+        return;
+      }
+
+      if (uid === player.lastAcceptedUid) {
+        addLog(`IGNORED DUPLICATE MEMORY TAG: ${hole} ${uid}`);
+        return;
+      }
+
+      const position = player.actual.length;
+
+      if (position >= round.expected.length) {
+        return;
+      }
+
+      expected = round.expected[position];
+      actual = tag ? tag[round.attribute] : "UNKNOWN";
+      correct = actual === expected;
+
+      if (!player.startedAt) {
+        player.startedAt = timestamp;
+      }
+
+      player.lastAcceptedUid = uid;
+      player.actual.push({ hole, value: actual, tag, correct, timestamp });
+      player.elapsedMs = timestamp - player.startedAt;
+
+      if (player.actual.length >= round.expected.length && !player.finishedAt) {
+        player.finishedAt = timestamp;
+        player.elapsedMs = player.finishedAt - player.startedAt;
+      }
+
+      renderMemory();
+      animateCat(hole === "LEFT" ? "memory-left-cat" : "memory-right-cat", tag);
+      roundComplete = Object.values(round.players).every((item) => item.actual.length >= round.expected.length);
+    } else {
+      if (hole !== round.hole) {
+        addLog(`IGNORED WRONG HOLE DURING MEMORY: ${hole}`);
+        return;
+      }
+
+      if (uid === round.lastAcceptedUid) {
+        addLog(`IGNORED DUPLICATE MEMORY TAG: ${uid}`);
+        return;
+      }
+
+      const position = round.actual.length;
+
+      if (position >= round.expected.length) {
+        return;
+      }
+
+      expected = round.expected[position];
+      actual = tag ? tag[round.attribute] : "UNKNOWN";
+      correct = actual === expected;
+      round.lastAcceptedUid = uid;
+      round.actual.push({ hole, value: actual, tag, correct });
+      renderMemory();
+      animateCat("memory-cat", tag);
+      roundComplete = round.actual.length >= round.expected.length;
     }
-
-    if (uid === round.lastAcceptedUid) {
-      addLog(`IGNORED DUPLICATE MEMORY TAG: ${uid}`);
-      return;
-    }
-
-    const position = round.actual.length;
-
-    if (position >= round.expected.length) {
-      return;
-    }
-
-    expected = round.expected[position];
-    actual = tag ? tag[round.attribute] : "UNKNOWN";
-    correct = actual === expected;
-    round.lastAcceptedUid = uid;
-    round.actual.push({ hole, value: actual, tag, correct });
-    renderMemory();
-    animateCat("memory-cat", tag);
-    roundComplete = round.actual.length >= round.expected.length;
   } else {
     const holeState = round.holes[hole];
 
@@ -727,8 +829,19 @@ function receiveScan(hole, uid) {
     const reactionTimeMs = timestamp - (round.lastTrialTimestamp || state.roundStartTime || timestamp);
     const isPerseverativeError = Boolean(!correct && previousExpectedHole && previousExpectedHole === hole);
 
+    if (!holeState.startedAt) {
+      holeState.startedAt = timestamp;
+    }
+
     round.lastTrialTimestamp = timestamp;
     holeState.count += 1;
+    holeState.elapsedMs = timestamp - holeState.startedAt;
+
+    if (holeState.count >= holeState.target && !holeState.finishedAt) {
+      holeState.finishedAt = timestamp;
+      holeState.elapsedMs = holeState.finishedAt - holeState.startedAt;
+    }
+
     round.trials.push({
       blockNumber: round.blockNumber,
       ruleType: round.attribute,
@@ -754,6 +867,8 @@ function receiveScan(hole, uid) {
   state.scans.push({
     round: state.roundIndex + 1,
     mode: round.mode,
+    playerMode: state.playerMode,
+    player: round.mode === "MEMORY" && state.playerMode === "two" ? hole : null,
     timestamp,
     hole,
     uid,
@@ -808,8 +923,12 @@ async function completeRound(timestamp) {
 
   if (state.currentRound.mode === "MEMORY") {
     state.phase = "MEMORY_COMPLETE";
-    renderMemoryComplete(perfectRound);
-    state.transitionTimer = window.setTimeout(renderLevelUp, 1600);
+    if (state.playerMode === "two" && state.currentRound.players) {
+      renderTwoPlayerMemoryComplete();
+    } else {
+      renderMemoryComplete(perfectRound);
+      state.transitionTimer = window.setTimeout(renderLevelUp, 1600);
+    }
     return;
   }
 
@@ -911,6 +1030,10 @@ function renderHome() {
       </div>
       <div class="home-hero">
         <h1 class="title">${t("gameTitle")}</h1>
+        <div class="player-mode-toggle" aria-label="${t("playerMode")}">
+          <button id="single-player-button" class="${state.playerMode === "single" ? "selected" : ""}" type="button">${t("onePlayer")}</button>
+          <button id="two-player-button" class="${state.playerMode === "two" ? "selected" : ""}" type="button">${t("twoPlayers")}</button>
+        </div>
         <form id="participant-form" class="participant-form panel">
           <p>${t("participantHint")}</p>
           <label>
@@ -933,6 +1056,16 @@ function renderHome() {
   document.querySelector("#participant-form").addEventListener("submit", (event) => {
     event.preventDefault();
     startTutorialSession();
+  });
+  document.querySelector("#single-player-button").addEventListener("click", () => {
+    cacheParticipantForm();
+    state.playerMode = "single";
+    renderHome();
+  });
+  document.querySelector("#two-player-button").addEventListener("click", () => {
+    cacheParticipantForm();
+    state.playerMode = "two";
+    renderHome();
   });
   document.querySelector("#start-cat-button").addEventListener("click", startTutorialSession);
 }
@@ -1047,6 +1180,12 @@ function renderCountdown(count) {
 function renderMemory(secondsRemaining = null) {
   const round = state.currentRound;
   const showingSequence = state.phase === "MEMORIZE";
+
+  if (!showingSequence && state.playerMode === "two" && round.players) {
+    renderTwoPlayerMemoryInput();
+    return;
+  }
+
   const heading = showingSequence ? t("rememberSequence") : t("feedCat");
   const hint = showingSequence ? t("rememberHint") : t("inputHint");
   const scannedValues = round.actual.map((item) => item.value);
@@ -1080,6 +1219,50 @@ function renderMemory(secondsRemaining = null) {
   `;
 }
 
+function renderTwoPlayerMemoryInput() {
+  const round = state.currentRound;
+
+  setHudProgress(progressForCurrentRound());
+  updateLanguageToggle();
+  elements.gameScreen.innerHTML = `
+    <section class="two-player-memory-screen">
+      <div class="result-heading">
+        <h2 class="screen-heading">${t("feedCat")}</h2>
+        <p class="key-hint">${t("inputHint")}</p>
+      </div>
+      <div class="duel-grid memory-duel-grid">
+        ${renderMemoryPlayerInput("LEFT", t("leftPlayer"), "pink-cat")}
+        ${renderMemoryPlayerInput("RIGHT", t("rightPlayer"), "blue-cat")}
+      </div>
+    </section>
+  `;
+}
+
+function renderMemoryPlayerInput(hole, label, catClass) {
+  const round = state.currentRound;
+  const player = round.players[hole];
+  const boxes = round.expected.map((_, index) => {
+    const item = player.actual[index];
+    return renderTokenBox(item?.value, round.attribute, Boolean(item));
+  }).join("");
+
+  return `
+    <article class="memory-player-card panel">
+      <div class="player-title-row">
+        <h3>${label}</h3>
+        <span class="winner-badge">${player.actual.length} / ${round.expected.length}</span>
+      </div>
+      <div class="memory-grid memory-input-row">
+        ${boxes}
+      </div>
+      <div class="memory-input-cat-row">
+        ${cat(`${catClass} result-cat`, hole === "LEFT" ? "memory-left-cat" : "memory-right-cat")}
+        <strong class="result-message">${t("keepFeeding")}</strong>
+      </div>
+    </article>
+  `;
+}
+
 function renderMemoryComplete(perfect) {
   const round = state.currentRound;
   const boxes = round.actual.map((item, index) => {
@@ -1103,6 +1286,65 @@ function renderMemoryComplete(perfect) {
         </div>
       </div>
     </section>
+  `;
+}
+
+function renderTwoPlayerMemoryComplete() {
+  const left = summarizeMemoryPlayer("LEFT");
+  const right = summarizeMemoryPlayer("RIGHT");
+  const winner = comparePlayers(left, right);
+
+  setHudProgress(progressForCompletedRound());
+  updateLanguageToggle();
+  elements.gameScreen.innerHTML = `
+    <section class="two-player-result-screen">
+      <div class="result-heading">
+        <h2 class="screen-heading">${t("roundCompleted")}</h2>
+        <p class="key-hint">${t("winnerRule")}</p>
+      </div>
+      <div class="duel-grid">
+        ${renderMemoryResultPanel("LEFT", t("leftPlayer"), "pink-cat", left, winner === "LEFT")}
+        ${renderMemoryResultPanel("RIGHT", t("rightPlayer"), "blue-cat", right, winner === "RIGHT")}
+      </div>
+      <button id="two-player-result-ok" class="ok-button result-ok-button" type="button">${t("ok")}</button>
+    </section>
+  `;
+  document.querySelector("#two-player-result-ok").addEventListener("click", beginNextRound);
+}
+
+function renderMemoryResultPanel(hole, label, catClass, summary, isWinner) {
+  const round = state.currentRound;
+  const status = isWinner ? t("winner") : t("runnerUp");
+  const message = isWinner ? t("youWin") : t("betterLuck");
+  const boxes = round.expected.map((expected, index) => {
+    const item = summary.actual[index];
+    const value = item?.value;
+    const correct = Boolean(item) && value === expected;
+
+    return value
+      ? renderResultBox(value, round.attribute, correct)
+      : renderTokenBox("", round.attribute);
+  }).join("");
+
+  return `
+    <article class="player-panel ${isWinner ? "winner" : ""}">
+      <div class="player-title-row">
+        <h3>${label}</h3>
+        <span class="winner-badge">${status}</span>
+      </div>
+      <div class="memory-grid memory-input-row">
+        ${boxes}
+      </div>
+      <div class="score-card">
+        <span>${t("score")}</span>
+        <strong>${summary.score}</strong>
+      </div>
+      <div class="player-message-row">
+        ${isWinner ? sparkles() : ""}
+        ${cat(`${catClass} result-cat ${isWinner ? "happy-cat" : ""}`)}
+        <strong class="result-message">${message}</strong>
+      </div>
+    </article>
   `;
 }
 
@@ -1146,10 +1388,13 @@ function renderSorting() {
 function renderSortingColumn(hole, holeState, attribute) {
   const catClass = hole === "LEFT" ? "pink-cat" : "blue-cat";
   const catId = hole === "LEFT" ? "left-cat" : "right-cat";
+  const label = state.playerMode === "two"
+    ? (hole === "LEFT" ? t("leftPlayer") : t("rightPlayer"))
+    : (hole === "LEFT" ? t("leftHole") : t("rightHole"));
 
   return `
     <section class="sort-card panel">
-      <p class="hole-title">${hole === "LEFT" ? t("leftHole") : t("rightHole")}</p>
+      <p class="hole-title">${label}</p>
       <div class="rule-row">
         ${renderRuleTile(holeState.expected, attribute)}
         <div class="count-panel">
@@ -1165,6 +1410,11 @@ function renderSortingColumn(hole, holeState, attribute) {
 }
 
 function renderSortingComplete() {
+  if (state.playerMode === "two") {
+    renderTwoPlayerSortingComplete();
+    return;
+  }
+
   setHudProgress(progressForCompletedRound());
   updateLanguageToggle();
   elements.gameScreen.innerHTML = `
@@ -1180,6 +1430,52 @@ function renderSortingComplete() {
     </section>
   `;
   document.querySelector("#sorting-complete-ok").addEventListener("click", beginNextRound);
+}
+
+function renderTwoPlayerSortingComplete() {
+  const left = summarizeSortingHole("LEFT");
+  const right = summarizeSortingHole("RIGHT");
+  const winner = comparePlayers(left, right);
+
+  setHudProgress(progressForCompletedRound());
+  updateLanguageToggle();
+  elements.gameScreen.innerHTML = `
+    <section class="two-player-result-screen">
+      <div class="result-heading">
+        <h2 class="screen-heading">${t("roundCompleted")}</h2>
+        <p class="key-hint">${t("winnerRule")}</p>
+      </div>
+      <div class="duel-grid sorting-outcome-grid">
+        ${renderSortingResultPanel("LEFT", t("leftPlayer"), "pink-cat", left, winner === "LEFT")}
+        ${renderSortingResultPanel("RIGHT", t("rightPlayer"), "blue-cat", right, winner === "RIGHT")}
+      </div>
+      <button id="two-player-sorting-ok" class="ok-button result-ok-button" type="button">${t("ok")}</button>
+    </section>
+  `;
+  document.querySelector("#two-player-sorting-ok").addEventListener("click", beginNextRound);
+}
+
+function renderSortingResultPanel(hole, label, catClass, summary, isWinner) {
+  const status = isWinner ? t("winner") : t("runnerUp");
+  const message = isWinner ? t("youWin") : t("betterLuck");
+
+  return `
+    <article class="player-panel sorting-winner-panel ${isWinner ? "winner" : ""}">
+      <div class="player-title-row">
+        <h3>${label}</h3>
+        <span class="winner-badge">${status}</span>
+      </div>
+      <div class="score-card">
+        <span>${t("score")}</span>
+        <strong>${summary.score}</strong>
+      </div>
+      <div class="player-message-row sorting-final-row">
+        ${isWinner ? sparkles() : ""}
+        ${cat(`${catClass} result-cat ${isWinner ? "happy-cat" : ""}`)}
+        <strong class="result-message">${message}</strong>
+      </div>
+    </article>
+  `;
 }
 
 function renderFinalScreen() {
@@ -1239,6 +1535,81 @@ function renderFinalScreen() {
   `;
   document.querySelector("#home-button").addEventListener("click", goHome);
   saveCompletedSession(sessionPayload);
+}
+
+function summarizeMemoryPlayer(hole) {
+  const round = state.currentRound;
+  const player = round.players[hole];
+  const total = round.expected.length;
+  const correct = player.actual.filter((item, index) => item.value === round.expected[index]).length;
+  const complete = player.actual.length >= total;
+
+  return {
+    actual: player.actual,
+    correct,
+    total,
+    complete,
+    elapsedMs: player.elapsedMs || 0,
+    score: scoreRound(correct, total, player.elapsedMs || 0, complete)
+  };
+}
+
+function summarizeSortingHole(hole) {
+  const round = state.currentRound;
+  const holeState = round.holes[hole];
+  const roundNumber = state.roundIndex + 1;
+  const holeScans = state.scans.filter((scan) => scan.round === roundNumber && scan.hole === hole);
+  const total = holeState.target;
+  const correct = holeScans.filter((scan) => scan.correct).length;
+  const complete = holeState.count >= holeState.target;
+
+  return {
+    actual: holeScans,
+    correct,
+    total,
+    complete,
+    elapsedMs: holeState.elapsedMs || 0,
+    score: scoreRound(correct, total, holeState.elapsedMs || 0, complete)
+  };
+}
+
+function scoreRound(correct, total, elapsedMs, complete) {
+  if (!total) {
+    return 0;
+  }
+
+  const seconds = Math.max(elapsedMs / 1000, 1);
+  const accuracyComponent = (correct / total) * 800;
+  const speedComponent = complete ? Math.min(200, 12000 / seconds) : 0;
+
+  return Math.round(accuracyComponent + speedComponent);
+}
+
+function comparePlayers(left, right) {
+  if (left.correct !== right.correct) {
+    return left.correct > right.correct ? "LEFT" : "RIGHT";
+  }
+
+  if (left.score !== right.score) {
+    return left.score > right.score ? "LEFT" : "RIGHT";
+  }
+
+  if (left.elapsedMs && right.elapsedMs && left.elapsedMs !== right.elapsedMs) {
+    return left.elapsedMs < right.elapsedMs ? "LEFT" : "RIGHT";
+  }
+
+  return "LEFT";
+}
+
+function sparkles() {
+  return `
+    <span class="sparkle-field" aria-hidden="true">
+      <span class="sparkle sparkle-one"></span>
+      <span class="sparkle sparkle-two"></span>
+      <span class="sparkle sparkle-three"></span>
+      <span class="sparkle sparkle-four"></span>
+    </span>
+  `;
 }
 
 function renderTokenBox(value, attribute, scanned = false) {
