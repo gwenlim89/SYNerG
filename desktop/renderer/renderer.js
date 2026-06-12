@@ -3,7 +3,6 @@ const COUNTDOWN_STEP_MS = 1000;
 const MEMORIZE_MS = 5000;
 const RESULT_LED_DELAY_MS = 430;
 const SAME_TAG_COOLDOWN_MS = 1200;
-const TUTORIAL_COOLDOWN_MS = 1200;
 const MEMORY_LENGTHS = [3, 3, 4, 5, 5, 6];
 const SORTING_ROUNDS = 6;
 const TOTAL_ROUNDS = MEMORY_LENGTHS.length + SORTING_ROUNDS;
@@ -98,10 +97,6 @@ const state = {
     LEFT: { uid: null, timestamp: 0 },
     RIGHT: { uid: null, timestamp: 0 }
   },
-  tutorialFedLeft: false,
-  tutorialFedRight: false,
-  tutorialLastFeedLeft: 0,
-  tutorialLastFeedRight: 0,
   lastRoundSeconds: null,
   sortingAttributePairs: [],
   lastSortingRuleSnapshot: null,
@@ -120,6 +115,7 @@ const TEXT = {
     gameTitle: "Kitten<br />Nibbles",
     start: "Start",
     pressStart: "Press start to play",
+<<<<<<< HEAD
     onePlayer: "1 Player",
     twoPlayers: "2 Players",
     playerMode: "Player mode",
@@ -132,20 +128,10 @@ const TEXT = {
     keepFeeding: "Keep feeding!",
     winnerRule: "Score uses accuracy first. Speed breaks a tie.",
     participantId: "Participant ID",
+=======
+>>>>>>> 5dd03da191f1b8d116596a4ede88d7b638929b26
     participantName: "Name",
-    participantHint: "Enter participant details before starting.",
-    tutorial: "Tutorial",
-    hungry: "The cats are hungry.",
-    tutorialLine1: "Put a token into a hole to feed the cat.",
-    tutorialLine2: "The cat is fed only when the light flashes blue.",
-    leftHole: "Left Hole",
-    rightHole: "Right Hole",
-    tryLeft: "Try left",
-    tryRight: "Try right",
-    fed: "Fed",
-    tutorialHint: "Try feeding both cats. Blue light means the cat ate it.",
-    tutorialGreat: "Great. Blue light means the cat ate it.",
-    tutorialOtherHole: "Good. Try the other hole too.",
+    participantHint: "Enter participant name before starting.",
     ok: "OK",
     game1: "Game 1",
     game2: "Game 2",
@@ -181,6 +167,7 @@ const TEXT = {
     gameTitle: "小猫<br />吃吃",
     start: "开始",
     pressStart: "按开始进入游戏",
+<<<<<<< HEAD
     onePlayer: "单人",
     twoPlayers: "双人",
     playerMode: "玩家模式",
@@ -193,20 +180,10 @@ const TEXT = {
     keepFeeding: "继续喂！",
     winnerRule: "先看正确率；平手时看速度。",
     participantId: "参与者编号",
+=======
+>>>>>>> 5dd03da191f1b8d116596a4ede88d7b638929b26
     participantName: "姓名",
-    participantHint: "请先输入参与者资料。",
-    tutorial: "教程",
-    hungry: "小猫饿了。",
-    tutorialLine1: "把代币放进洞里喂小猫。",
-    tutorialLine2: "只有灯闪蓝色时，小猫才吃到了。",
-    leftHole: "左洞",
-    rightHole: "右洞",
-    tryLeft: "试试左边",
-    tryRight: "试试右边",
-    fed: "已喂",
-    tutorialHint: "试着喂两只小猫。蓝灯亮起表示小猫吃到了。",
-    tutorialGreat: "很好！蓝灯表示小猫吃到了。",
-    tutorialOtherHole: "很好。再试试另一个洞。",
+    participantHint: "请先输入参与者姓名。",
     ok: "好的",
     game1: "游戏一",
     game2: "游戏二",
@@ -348,11 +325,6 @@ function handleSerialLine(line) {
     return;
   }
 
-  if (state.phase === "TUTORIAL") {
-    handleTutorialScan(fields.HOLE, fields.UID);
-    return;
-  }
-
   receiveScan(fields.HOLE, fields.UID);
 }
 
@@ -391,7 +363,7 @@ function handleRemovedLine(line) {
   }
 }
 
-async function startTutorialSession() {
+async function startSession() {
   if (!state.connected) {
     elements.settingsPanel.hidden = false;
     addLog("Connect the MCU before starting.");
@@ -405,7 +377,7 @@ async function startTutorialSession() {
   }
 
   try {
-    const saved = await window.orderStackApi.saveParticipant(participant);
+    const saved = await window.orderStackApi.getOrCreateParticipant(participant.participantName);
     state.participant.id = saved.participantId;
     state.participant.name = saved.participantName;
   } catch (error) {
@@ -414,9 +386,8 @@ async function startTutorialSession() {
   }
 
   resetSessionState();
-  renderTutorial();
   await sendLedCommand("LED:OFF");
-  await setScanMode("BOTH");
+  beginNextRound();
 }
 
 function resetSessionState() {
@@ -428,22 +399,12 @@ function resetSessionState() {
   state.roundStartTime = null;
   state.records = [];
   state.scans = [];
-  state.tutorialFedLeft = false;
-  state.tutorialFedRight = false;
-  state.tutorialLastFeedLeft = 0;
-  state.tutorialLastFeedRight = 0;
   state.lastRoundSeconds = null;
   state.sortingAttributePairs = createSortingAttributePairs();
   state.lastSortingRuleSnapshot = null;
   state.sessionSaved = false;
   state.sessionSaveResult = null;
   resetRecentScans();
-}
-
-async function finishTutorial() {
-  await setScanMode("OFF");
-  await sendLedCommand("LED:OFF");
-  beginNextRound();
 }
 
 async function goHome() {
@@ -679,54 +640,6 @@ function rememberRecentScan(hole, uid, timestamp) {
   }
 
   state.recentScans[hole] = { uid, timestamp };
-}
-
-function handleTutorialScan(hole, uid) {
-  const tag = TAGS[uid] || null;
-  const timestamp = performance.now();
-
-  if (!tag || !["LEFT", "RIGHT"].includes(hole)) {
-    addLog(`IGNORED TUTORIAL TAG: ${hole || "UNKNOWN"} ${uid || "NO UID"}`);
-    return;
-  }
-
-  const lastFeed = hole === "LEFT" ? state.tutorialLastFeedLeft : state.tutorialLastFeedRight;
-
-  if (timestamp - lastFeed < TUTORIAL_COOLDOWN_MS || isSameTagCoolingDown(hole, uid, timestamp)) {
-    addLog(`IGNORED TUTORIAL COOLDOWN: ${hole} ${uid}`);
-    return;
-  }
-
-  rememberRecentScan(hole, uid, timestamp);
-  triggerScreenHalo(hole);
-  sendLedCommand(`LED:SCAN:${hole}`);
-
-  if (hole === "LEFT") {
-    state.tutorialFedLeft = true;
-    state.tutorialLastFeedLeft = timestamp;
-    document.querySelector("#tutorial-left-status").textContent = t("fed");
-    animateCat("tutorial-left-cat", tag);
-    flashTutorialLight("tutorial-left-card");
-  } else {
-    state.tutorialFedRight = true;
-    state.tutorialLastFeedRight = timestamp;
-    document.querySelector("#tutorial-right-status").textContent = t("fed");
-    animateCat("tutorial-right-cat", tag);
-    flashTutorialLight("tutorial-right-card");
-  }
-
-  const hint = document.querySelector("#tutorial-hint");
-
-  if (state.tutorialFedLeft && state.tutorialFedRight) {
-    hint.textContent = t("tutorialGreat");
-    const okButton = document.querySelector("#tutorial-ok-button");
-    okButton.disabled = false;
-    okButton.classList.remove("is-hidden");
-    setHudProgress(18);
-  } else {
-    hint.textContent = t("tutorialOtherHole");
-    setHudProgress(12);
-  }
 }
 
 function receiveScan(hole, uid) {
@@ -1037,10 +950,6 @@ function renderHome() {
         <form id="participant-form" class="participant-form panel">
           <p>${t("participantHint")}</p>
           <label>
-            <span>${t("participantId")}</span>
-            <input id="participant-id-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.id)}" />
-          </label>
-          <label>
             <span>${t("participantName")}</span>
             <input id="participant-name-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.name)}" />
           </label>
@@ -1055,8 +964,9 @@ function renderHome() {
   `;
   document.querySelector("#participant-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    startTutorialSession();
+    startSession();
   });
+<<<<<<< HEAD
   document.querySelector("#single-player-button").addEventListener("click", () => {
     cacheParticipantForm();
     state.playerMode = "single";
@@ -1106,6 +1016,9 @@ function renderTutorial() {
     </section>
   `;
   document.querySelector("#tutorial-ok-button").addEventListener("click", finishTutorial);
+=======
+  document.querySelector("#start-cat-button").addEventListener("click", startSession);
+>>>>>>> 5dd03da191f1b8d116596a4ede88d7b638929b26
 }
 
 function renderGameInstruction(mode) {
@@ -1654,32 +1567,20 @@ function renderRuleTile(value, attribute) {
 
 function readParticipantForm() {
   cacheParticipantForm();
-  const idInput = document.querySelector("#participant-id-input");
-  const participantId = state.participant.id;
-  const participantName = state.participant.name || participantId;
+  const nameInput = document.querySelector("#participant-name-input");
+  const participantName = state.participant.name;
 
-  if (!participantId) {
-    addLog("Participant ID is required before starting.");
-    idInput?.focus();
+  if (!participantName) {
+    addLog("Participant name is required before starting.");
+    nameInput?.focus();
     return null;
   }
 
-  state.participant.id = participantId;
-  state.participant.name = participantName;
-
-  return {
-    participantId,
-    participantName
-  };
+  return { participantName };
 }
 
 function cacheParticipantForm() {
-  const idInput = document.querySelector("#participant-id-input");
   const nameInput = document.querySelector("#participant-name-input");
-
-  if (idInput) {
-    state.participant.id = idInput.value.trim();
-  }
 
   if (nameInput) {
     state.participant.name = nameInput.value.trim();
@@ -2090,22 +1991,6 @@ function animateCat(id, token = null) {
   window.setTimeout(() => {
     catElement.classList.remove("eating");
   }, 880);
-}
-
-function flashTutorialLight(cardId) {
-  const card = document.querySelector(`#${cardId}`);
-
-  if (!card) {
-    return;
-  }
-
-  card.classList.remove("blue-flash");
-  void card.getBoundingClientRect();
-  card.classList.add("blue-flash");
-
-  window.setTimeout(() => {
-    card.classList.remove("blue-flash");
-  }, 900);
 }
 
 function formatDuration(seconds) {
