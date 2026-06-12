@@ -44,10 +44,17 @@
           <button id="close-settings-button" class="settings-close-button" type="button" aria-label="Close settings" title="Close settings">×</button>
         </div>
 
+        <p class="connection-label">Player 1</p>
         <div class="connection-row">
-          <select id="port-select" aria-label="Serial port"></select>
+          <select id="port-select" aria-label="P1 serial port"></select>
           <button id="refresh-button" class="secondary-button" type="button">Refresh</button>
-          <button id="connect-button" class="primary-button" type="button">Connect MCU</button>
+          <button id="connect-button" class="primary-button" type="button">Connect P1</button>
+        </div>
+        <p class="connection-label">Player 2</p>
+        <div class="connection-row">
+          <select id="port-select-p2" aria-label="P2 serial port"></select>
+          <button id="connect-button-p2" class="primary-button" type="button">Connect P2</button>
+          <strong id="connection-status-p2" class="connection-chip">P2: Not connected</strong>
         </div>
 
         <div class="debug-row">

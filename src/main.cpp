@@ -3,20 +3,34 @@
 #include <Adafruit_PN532.h>
 #include <FastLED.h>
 
+// Set to 1 for MCU1 (Player 1) or 2 for MCU2 (Player 2) before flashing.
+#define PLAYER_NUM 2
+
 // Shared SPI bus for the two PN532 readers.
 #define PN532_SCK_PIN    4
 #define PN532_MISO_PIN   5
 #define PN532_MOSI_PIN   6
-#define LEFT_SS_PIN      3
-#define RIGHT_SS_PIN     9
 
-// WS2812B NeoPixel strip, data on pin 9.
-#define LED_DATA_PIN     8
+#if PLAYER_NUM == 1
+  #define LEFT_SS_PIN     2
+  #define RIGHT_SS_PIN    7
+  #define LED_DATA_PIN    10
+  #define LEFT_LED_START  4
+  #define LEFT_LED_END    8
+  #define RIGHT_LED_START 0
+  #define RIGHT_LED_END   4
+#elif PLAYER_NUM == 2
+  #define LEFT_SS_PIN     9
+  #define RIGHT_SS_PIN    3
+  #define LED_DATA_PIN    8
+  #define LEFT_LED_START  0
+  #define LEFT_LED_END    4
+  #define RIGHT_LED_START 4
+  #define RIGHT_LED_END   8
+#else
+  #error "PLAYER_NUM must be 1 or 2"
+#endif
 #define NUM_LEDS         8
-#define LEFT_LED_START   4
-#define LEFT_LED_END     8
-#define RIGHT_LED_START  0
-#define RIGHT_LED_END    4
 #define SCAN_FLASH_MS    350
 #define RESULT_MS        1600
 #define SAME_UID_COOLDOWN_MS 1200
@@ -457,7 +471,8 @@ void setup() {
   delay(2500);
 
   Serial.println();
-  Serial.println("BOOT|DEVICE:ORDER_STACK_COGNITIVE_ROUNDS");
+  Serial.print("BOOT|DEVICE:ORDER_STACK_COGNITIVE_ROUNDS|PLAYER:");
+  Serial.println(PLAYER_NUM);
 
   setupLeds();
 

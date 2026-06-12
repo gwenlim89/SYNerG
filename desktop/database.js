@@ -105,7 +105,16 @@ async function initDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_trials_session
       ON game2_trials(session_id);
+
+    CREATE TABLE IF NOT EXISTS matches (
+      match_id TEXT PRIMARY KEY,
+      match_date TEXT NOT NULL
+    );
   `);
+
+  try {
+    await runSql(`ALTER TABLE sessions ADD COLUMN match_id TEXT REFERENCES matches(match_id);`);
+  } catch (_) {}
 
   return dbPath;
 }
@@ -148,6 +157,13 @@ async function getOrCreateParticipant(name) {
   return { participantId, participantName, dbPath };
 }
 
+async function createMatch() {
+  const matchId = makeId("match");
+  const matchDate = new Date().toISOString();
+  await runSql(`INSERT INTO matches (match_id, match_date) VALUES (${sqlText(matchId)}, ${sqlText(matchDate)});`);
+  return { matchId };
+}
+
 async function saveParticipant(participant) {
   const participantId = normalizeRequiredText(participant.participantId, "participant_id");
   const participantName = normalizeRequiredText(participant.participantName || participantId, "participant_name");
@@ -188,6 +204,7 @@ async function saveGameSession(payload) {
       sessionId,
       participantId: participant.participantId,
       sessionDate,
+      matchId: payload.matchId || null,
       payload,
       rating
     }),
@@ -220,7 +237,7 @@ async function saveGameSession(payload) {
   };
 }
 
-function sessionInsertSql({ sessionId, participantId, sessionDate, payload, rating }) {
+function sessionInsertSql({ sessionId, participantId, sessionDate, matchId, payload, rating }) {
   return `
     INSERT INTO sessions (
       session_id,
@@ -236,7 +253,8 @@ function sessionInsertSql({ sessionId, participantId, sessionDate, payload, rati
       executive_rating,
       monitoring_status,
       flag_reason,
-      data_quality_flag
+      data_quality_flag,
+      match_id
     ) VALUES (
       ${sqlText(sessionId)},
       ${sqlText(participantId)},
@@ -251,7 +269,8 @@ function sessionInsertSql({ sessionId, participantId, sessionDate, payload, rati
       ${sqlText(rating.executiveRating)},
       ${sqlText(rating.monitoringStatus)},
       ${sqlText(rating.flagReason)},
-      ${sqlText(payload.dataQualityFlag || "valid")}
+      ${sqlText(payload.dataQualityFlag || "valid")},
+      ${sqlNullableText(matchId)}
     );
   `;
 }
@@ -640,6 +659,7 @@ module.exports = {
   saveGameSession,
   saveParticipant,
   getOrCreateParticipant,
+  createMatch,
   get dbPath() {
     return dbPath;
   }

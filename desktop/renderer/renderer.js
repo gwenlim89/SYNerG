@@ -73,11 +73,15 @@ const elements = {
   regShapeSelect: document.querySelector("#reg-shape-select"),
   regAssignButton: document.querySelector("#reg-assign-button"),
   regList: document.querySelector("#reg-list"),
-  regCopyButton: document.querySelector("#reg-copy-button")
+  regCopyButton: document.querySelector("#reg-copy-button"),
+  portSelectP2: document.querySelector("#port-select-p2"),
+  connectButtonP2: document.querySelector("#connect-button-p2"),
+  connectionStatusP2: document.querySelector("#connection-status-p2")
 };
 
 const state = {
   connected: false,
+  connectedP2: false,
   language: "en",
   playerMode: "single",
   phase: "HOME",
@@ -90,6 +94,12 @@ const state = {
     id: "",
     name: ""
   },
+  participant2: {
+    name: ""
+  },
+  matchId: null,
+  p1: null,
+  p2: null,
   scanEnabled: false,
   records: [],
   scans: [],
@@ -115,7 +125,6 @@ const TEXT = {
     gameTitle: "Kitten<br />Nibbles",
     start: "Start",
     pressStart: "Press start to play",
-<<<<<<< HEAD
     onePlayer: "1 Player",
     twoPlayers: "2 Players",
     playerMode: "Player mode",
@@ -127,9 +136,6 @@ const TEXT = {
     betterLuck: "Better luck next time!",
     keepFeeding: "Keep feeding!",
     winnerRule: "Score uses accuracy first. Speed breaks a tie.",
-    participantId: "Participant ID",
-=======
->>>>>>> 5dd03da191f1b8d116596a4ede88d7b638929b26
     participantName: "Name",
     participantHint: "Enter participant name before starting.",
     ok: "OK",
@@ -167,7 +173,6 @@ const TEXT = {
     gameTitle: "小猫<br />吃吃",
     start: "开始",
     pressStart: "按开始进入游戏",
-<<<<<<< HEAD
     onePlayer: "单人",
     twoPlayers: "双人",
     playerMode: "玩家模式",
@@ -179,9 +184,6 @@ const TEXT = {
     betterLuck: "下次加油！",
     keepFeeding: "继续喂！",
     winnerRule: "先看正确率；平手时看速度。",
-    participantId: "参与者编号",
-=======
->>>>>>> 5dd03da191f1b8d116596a4ede88d7b638929b26
     participantName: "姓名",
     participantHint: "请先输入参与者姓名。",
     ok: "好的",
@@ -226,6 +228,7 @@ elements.closeSettingsButton.addEventListener("click", () => {
 });
 elements.refreshButton.addEventListener("click", refreshPorts);
 elements.connectButton.addEventListener("click", connectMcu);
+elements.connectButtonP2.addEventListener("click", connectMcuP2);
 elements.clearLogButton.addEventListener("click", () => {
   elements.logList.innerHTML = "";
 });
@@ -244,6 +247,18 @@ window.orderStackApi.onError((message) => {
 window.orderStackApi.onClosed(() => {
   addLog("Serial port disconnected.");
   setConnected(false);
+});
+window.orderStackApi.onLineP2((line) => {
+  addLog(`P2: ${line}`);
+  handleSerialLineP2(line);
+});
+window.orderStackApi.onErrorP2((message) => {
+  addLog(`P2 ERROR: ${message}`);
+  setConnectedP2(false);
+});
+window.orderStackApi.onClosedP2(() => {
+  addLog("P2 serial port disconnected.");
+  setConnectedP2(false);
 });
 
 refreshPorts();
@@ -270,13 +285,19 @@ function updateLanguageToggle() {
 
 async function refreshPorts() {
   const ports = await window.orderStackApi.listPorts();
+  const noneOption = () => { const o = document.createElement("option"); o.value = ""; o.textContent = "— none —"; return o; };
+
   elements.portSelect.innerHTML = "";
+  elements.portSelectP2.innerHTML = "";
+  elements.portSelectP2.appendChild(noneOption());
 
   for (const port of ports) {
-    const option = document.createElement("option");
-    option.value = port.path;
-    option.textContent = port.friendlyName;
-    elements.portSelect.appendChild(option);
+    for (const select of [elements.portSelect, elements.portSelectP2]) {
+      const option = document.createElement("option");
+      option.value = port.path;
+      option.textContent = port.friendlyName;
+      select.appendChild(option);
+    }
   }
 }
 
@@ -301,7 +322,29 @@ async function connectMcu() {
 function setConnected(connected) {
   state.connected = connected;
   elements.connectionStatus.textContent = connected ? "Device: Connected" : "Device: Not connected";
-  elements.connectButton.textContent = connected ? "Connected" : "Connect MCU";
+  elements.connectButton.textContent = connected ? "P1: Connected" : "Connect P1";
+}
+
+async function connectMcuP2() {
+  if (!elements.portSelectP2.value) {
+    addLog("Choose a P2 serial port first.");
+    return;
+  }
+
+  try {
+    await window.orderStackApi.connectP2(elements.portSelectP2.value);
+    setConnectedP2(true);
+    await sendLedCommandToPlayer("LED:OFF", 2);
+  } catch (error) {
+    addLog(`P2 CONNECT ERROR: ${error.message}`);
+    setConnectedP2(false);
+  }
+}
+
+function setConnectedP2(connected) {
+  state.connectedP2 = connected;
+  elements.connectionStatusP2.textContent = connected ? "P2: Connected" : "P2: Not connected";
+  elements.connectButtonP2.textContent = connected ? "P2: Connected" : "Connect P2";
 }
 
 function handleSerialLine(line) {
@@ -316,6 +359,15 @@ function handleSerialLine(line) {
 
   const fields = parseFields(line);
 
+  if (state.playerMode === "two") {
+    if (!state.p1?.scanEnabled) {
+      return;
+    }
+
+    receiveScanForPlayer(state.p1, fields.HOLE, fields.UID, 1);
+    return;
+  }
+
   if (state.regScanEnabled && !state.scanEnabled) {
     handleRegScan(fields.UID);
     return;
@@ -326,6 +378,34 @@ function handleSerialLine(line) {
   }
 
   receiveScan(fields.HOLE, fields.UID);
+}
+
+function handleSerialLineP2(line) {
+  if (line.startsWith("REMOVED|")) {
+    const fields = parseFields(line);
+    const hole = fields.HOLE;
+
+    if (hole && state.p2?.recentScans?.[hole]) {
+      state.p2.recentScans[hole] = { uid: null, timestamp: 0 };
+    }
+
+    if (state.p2?.currentRound?.mode === "MEMORY" && hole === state.p2.currentRound.hole) {
+      state.p2.currentRound.lastAcceptedUid = null;
+    }
+
+    return;
+  }
+
+  if (!line.startsWith("SCAN|")) {
+    return;
+  }
+
+  if (!state.p2?.scanEnabled) {
+    return;
+  }
+
+  const fields = parseFields(line);
+  receiveScanForPlayer(state.p2, fields.HOLE, fields.UID, 2);
 }
 
 function parseFields(line) {
@@ -344,19 +424,23 @@ function handleRemovedLine(line) {
   const fields = parseFields(line);
   const hole = fields.HOLE;
 
+  if (state.playerMode === "two") {
+    if (hole && state.p1?.recentScans?.[hole]) {
+      state.p1.recentScans[hole] = { uid: null, timestamp: 0 };
+    }
+
+    if (state.p1?.currentRound?.mode === "MEMORY" && hole === state.p1.currentRound.hole) {
+      state.p1.currentRound.lastAcceptedUid = null;
+    }
+
+    return;
+  }
+
   if (hole && state.recentScans[hole]) {
     state.recentScans[hole] = { uid: null, timestamp: 0 };
   }
 
-  if (
-    state.currentRound?.mode === "MEMORY" &&
-    state.phase === "MEMORY_INPUT"
-  ) {
-    if (state.currentRound.players?.[hole]) {
-      state.currentRound.players[hole].lastAcceptedUid = null;
-      return;
-    }
-
+  if (state.currentRound?.mode === "MEMORY" && state.phase === "MEMORY_INPUT") {
     if (hole === state.currentRound.hole) {
       state.currentRound.lastAcceptedUid = null;
     }
@@ -367,6 +451,12 @@ async function startSession() {
   if (!state.connected) {
     elements.settingsPanel.hidden = false;
     addLog("Connect the MCU before starting.");
+    return;
+  }
+
+  if (state.playerMode === "two" && !state.connectedP2) {
+    elements.settingsPanel.hidden = false;
+    addLog("Connect both P1 and P2 before starting a two-player game.");
     return;
   }
 
@@ -385,9 +475,45 @@ async function startSession() {
     return;
   }
 
-  resetSessionState();
-  await sendLedCommand("LED:OFF");
+  if (state.playerMode === "two") {
+    try {
+      const saved2 = await window.orderStackApi.getOrCreateParticipant(participant.participantName2);
+      state.participant2.name = saved2.participantName;
+
+      const match = await window.orderStackApi.createMatch();
+      state.matchId = match.matchId;
+
+      resetSessionState();
+
+      state.p1 = makePlayerSession(state.participant.id, state.participant.name);
+      state.p2 = makePlayerSession(saved2.participantId, saved2.participantName);
+    } catch (error) {
+      addLog(`DATABASE ERROR: ${error.message}`);
+      return;
+    }
+  } else {
+    resetSessionState();
+  }
+
+  await sendLedCommandAll("LED:OFF");
   beginNextRound();
+}
+
+function makePlayerSession(participantId, participantName) {
+  return {
+    participantId,
+    participantName,
+    scans: [],
+    records: [],
+    sortingAttributePairs: createSortingAttributePairs(),
+    lastSortingRuleSnapshot: null,
+    sessionSaved: false,
+    sessionSaveResult: null,
+    currentRound: null,
+    roundDone: false,
+    scanEnabled: false,
+    recentScans: { LEFT: { uid: null, timestamp: 0 }, RIGHT: { uid: null, timestamp: 0 } }
+  };
 }
 
 function resetSessionState() {
@@ -404,18 +530,26 @@ function resetSessionState() {
   state.lastSortingRuleSnapshot = null;
   state.sessionSaved = false;
   state.sessionSaveResult = null;
+  state.matchId = null;
+  state.p1 = null;
+  state.p2 = null;
   resetRecentScans();
 }
 
 async function goHome() {
   clearTimers();
-  await setScanMode("OFF");
-  await sendLedCommand("LED:OFF");
+  await setScanModeAll("OFF");
+  await sendLedCommandAll("LED:OFF");
   resetSessionState();
   renderHome();
 }
 
 async function beginNextRound() {
+  if (state.playerMode === "two") {
+    await _beginTwoPlayerNextRound();
+    return;
+  }
+
   clearTimers();
   await setScanMode("OFF");
   await sendLedCommand("LED:OFF");
@@ -438,35 +572,56 @@ async function beginNextRound() {
   beginCountdown();
 }
 
+async function _beginTwoPlayerNextRound() {
+  clearTimers();
+  await Promise.all([
+    setScanModeForPlayer("OFF", 1),
+    setScanModeForPlayer("OFF", 2),
+    sendLedCommandToPlayer("LED:OFF", 1),
+    sendLedCommandToPlayer("LED:OFF", 2)
+  ]);
+
+  if (state.p1) {
+    state.p1.recentScans = { LEFT: { uid: null, timestamp: 0 }, RIGHT: { uid: null, timestamp: 0 } };
+    state.p1.roundDone = false;
+    state.p1.scanEnabled = false;
+  }
+
+  if (state.p2) {
+    state.p2.recentScans = { LEFT: { uid: null, timestamp: 0 }, RIGHT: { uid: null, timestamp: 0 } };
+    state.p2.roundDone = false;
+    state.p2.scanEnabled = false;
+  }
+
+  state.roundIndex += 1;
+
+  if (state.roundIndex >= TOTAL_ROUNDS) {
+    renderTwoPlayerFinalScreen();
+    return;
+  }
+
+  const mode = state.roundIndex < MEMORY_LENGTHS.length ? "MEMORY" : "SORTING";
+  createTwoPlayerRound(mode);
+
+  if (state.roundIndex === 0 || state.roundIndex === MEMORY_LENGTHS.length) {
+    renderGameInstruction(mode);
+    return;
+  }
+
+  beginCountdown();
+}
+
 function createMemoryRound() {
   state.memoryRoundIndex += 1;
   const attribute = randomChoice(["color", "shape"]);
   const values = attribute === "color" ? COLORS : SHAPES;
-  const round = {
+
+  return {
     mode: "MEMORY",
     attribute,
-    hole: state.playerMode === "two" ? "BOTH" : randomChoice(["LEFT", "RIGHT"]),
+    hole: randomChoice(["LEFT", "RIGHT"]),
     expected: Array.from({ length: MEMORY_LENGTHS[state.memoryRoundIndex] }, () => randomChoice(values)),
     actual: [],
-    lastAcceptedUid: null
-  };
-
-  if (state.playerMode === "two") {
-    round.players = {
-      LEFT: createMemoryPlayer(),
-      RIGHT: createMemoryPlayer()
-    };
-  }
-
-  return round;
-}
-
-function createMemoryPlayer() {
-  return {
-    actual: [],
-    startedAt: null,
-    finishedAt: null,
-    elapsedMs: 0,
     lastAcceptedUid: null
   };
 }
@@ -478,7 +633,6 @@ function createSortingRound() {
   const blockNumber = Math.floor(state.sortingRoundIndex / 2) + 1;
   const roundInBlock = (state.sortingRoundIndex % 2) + 1;
   const isSwitchRound = roundInBlock === 1 && Boolean(state.lastSortingRuleSnapshot);
-  const sharedTarget = state.playerMode === "two" ? randomInteger(1, 4) : null;
 
   return {
     mode: "SORTING",
@@ -491,20 +645,78 @@ function createSortingRound() {
     lastTrialTimestamp: null,
     trials: [],
     holes: {
-      LEFT: createSortingHole(values[0], sharedTarget),
-      RIGHT: createSortingHole(values[1], sharedTarget)
+      LEFT: createSortingHole(values[0]),
+      RIGHT: createSortingHole(values[1])
     }
-  };
-}
+  };}
 
-function createSortingHole(expected, target = null) {
+function createSortingHole(expected) {
   return {
     expected,
-    target: target || randomInteger(1, 4),
+    target: randomInteger(1, 4),
     count: 0,
     startedAt: null,
     finishedAt: null,
     elapsedMs: 0
+  };
+}
+
+function createTwoPlayerRound(mode) {
+  state.currentRound = { mode, roundStartTime: null };
+
+  if (mode === "MEMORY") {
+    state.memoryRoundIndex += 1;
+    const seqLen = MEMORY_LENGTHS[state.memoryRoundIndex];
+    state.p1.currentRound = _makeTwoPlayerMemoryRound(seqLen);
+    state.p2.currentRound = _makeTwoPlayerMemoryRound(seqLen);
+  } else {
+    state.sortingRoundIndex += 1;
+    state.p1.currentRound = _makeTwoPlayerSortingRound(state.p1.sortingAttributePairs, state.p1.lastSortingRuleSnapshot);
+    state.p2.currentRound = _makeTwoPlayerSortingRound(state.p2.sortingAttributePairs, state.p2.lastSortingRuleSnapshot);
+  }
+
+  state.p1.roundDone = false;
+  state.p2.roundDone = false;
+}
+
+function _makeTwoPlayerMemoryRound(seqLen) {
+  const attribute = randomChoice(["color", "shape"]);
+  const values = attribute === "color" ? COLORS : SHAPES;
+
+  return {
+    mode: "MEMORY",
+    attribute,
+    hole: randomChoice(["LEFT", "RIGHT"]),
+    expected: Array.from({ length: seqLen }, () => randomChoice(values)),
+    actual: [],
+    lastAcceptedUid: null,
+    startedAt: null,
+    finishedAt: null,
+    elapsedMs: 0
+  };
+}
+
+function _makeTwoPlayerSortingRound(attributePairs, lastSnapshot) {
+  const attribute = attributePairs[Math.floor(state.sortingRoundIndex / 2)];
+  const values = shuffle(attribute === "color" ? COLORS : SHAPES);
+  const blockNumber = Math.floor(state.sortingRoundIndex / 2) + 1;
+  const roundInBlock = (state.sortingRoundIndex % 2) + 1;
+  const isSwitchRound = roundInBlock === 1 && Boolean(lastSnapshot);
+
+  return {
+    mode: "SORTING",
+    attribute,
+    sortingRoundNumber: state.sortingRoundIndex + 1,
+    blockNumber,
+    roundInBlock,
+    isSwitchRound,
+    previousRule: isSwitchRound ? lastSnapshot : null,
+    lastTrialTimestamp: null,
+    trials: [],
+    holes: {
+      LEFT: createSortingHole(values[0]),
+      RIGHT: createSortingHole(values[1])
+    }
   };
 }
 
@@ -538,12 +750,14 @@ function beginCountdown() {
 }
 
 async function startPlayableRound() {
+  if (state.playerMode === "two") {
+    await _startTwoPlayerPlayableRound();
+    return;
+  }
+
   if (state.currentRound.mode === "MEMORY") {
     state.phase = "MEMORIZE";
-    await sendLedCommand(state.playerMode === "two"
-      ? "LED:SORT:LEFT:YELLOW:RIGHT:YELLOW"
-      : `LED:MEMORY:${state.currentRound.hole}`
-    );
+    await sendLedCommand(`LED:MEMORY:${state.currentRound.hole}`);
     let secondsRemaining = MEMORIZE_MS / 1000;
     renderMemory(secondsRemaining);
 
@@ -566,6 +780,73 @@ async function startPlayableRound() {
   }
 }
 
+async function _startTwoPlayerPlayableRound() {
+  const mode = state.currentRound.mode;
+
+  if (mode === "MEMORY") {
+    state.phase = "MEMORIZE";
+    await Promise.all([
+      sendLedCommandToPlayer(`LED:MEMORY:${state.p1.currentRound.hole}`, 1),
+      sendLedCommandToPlayer(`LED:MEMORY:${state.p2.currentRound.hole}`, 2)
+    ]);
+    let secondsRemaining = MEMORIZE_MS / 1000;
+    renderTwoPlayerMemorize(secondsRemaining);
+
+    state.memoryTimer = window.setInterval(() => {
+      secondsRemaining -= 1;
+
+      if (secondsRemaining === 0) {
+        clearMemoryTimer();
+        _startTwoPlayerMemoryInput();
+        return;
+      }
+
+      renderTwoPlayerMemorize(secondsRemaining);
+    }, 1000);
+  } else {
+    state.phase = "SORTING";
+    const p1Round = state.p1.currentRound;
+    const p2Round = state.p2.currentRound;
+    const p1Left = p1Round.attribute === "color" ? p1Round.holes.LEFT.expected : "WHITE";
+    const p1Right = p1Round.attribute === "color" ? p1Round.holes.RIGHT.expected : "WHITE";
+    const p2Left = p2Round.attribute === "color" ? p2Round.holes.LEFT.expected : "WHITE";
+    const p2Right = p2Round.attribute === "color" ? p2Round.holes.RIGHT.expected : "WHITE";
+
+    await Promise.all([
+      sendLedCommandToPlayer(`LED:SORT:LEFT:${p1Left}:RIGHT:${p1Right}`, 1),
+      sendLedCommandToPlayer(`LED:SORT:LEFT:${p2Left}:RIGHT:${p2Right}`, 2)
+    ]);
+
+    const now = performance.now();
+    state.currentRound.roundStartTime = now;
+    state.p1.currentRound.lastTrialTimestamp = now;
+    state.p2.currentRound.lastTrialTimestamp = now;
+    state.p1.scanEnabled = true;
+    state.p2.scanEnabled = true;
+
+    await Promise.all([
+      setScanModeForPlayer("BOTH", 1),
+      setScanModeForPlayer("BOTH", 2)
+    ]);
+
+    renderTwoPlayerSorting();
+  }
+}
+
+async function _startTwoPlayerMemoryInput() {
+  state.phase = "MEMORY_INPUT";
+  state.p1.scanEnabled = true;
+  state.p2.scanEnabled = true;
+  state.currentRound.roundStartTime = performance.now();
+
+  await Promise.all([
+    setScanModeForPlayer(state.p1.currentRound.hole, 1),
+    setScanModeForPlayer(state.p2.currentRound.hole, 2)
+  ]);
+
+  renderTwoPlayerMemoryInput();
+}
+
 function startMemoryInput() {
   state.phase = "MEMORY_INPUT";
   renderMemory();
@@ -579,10 +860,7 @@ async function startActiveTimerAndScanning() {
     state.currentRound.lastTrialTimestamp = state.roundStartTime;
   }
 
-  const scanMode = state.currentRound.mode === "MEMORY"
-    ? (state.playerMode === "two" ? "BOTH" : state.currentRound.hole)
-    : "BOTH";
-  await setScanMode(scanMode);
+  await setScanMode(state.currentRound.mode === "MEMORY" ? state.currentRound.hole : "BOTH");
 }
 
 async function setScanMode(mode) {
@@ -608,6 +886,62 @@ async function sendLedCommand(command) {
     await window.orderStackApi.write(`${command}\n`);
   } catch (error) {
     addLog(`LED WRITE ERROR: ${error.message}`);
+  }
+}
+
+async function sendLedCommandToPlayer(command, playerIndex) {
+  if (playerIndex === 2) {
+    if (!state.connectedP2) {
+      return;
+    }
+
+    try {
+      await window.orderStackApi.writeP2(`${command}\n`);
+    } catch (error) {
+      addLog(`P2 LED WRITE ERROR: ${error.message}`);
+    }
+  } else {
+    await sendLedCommand(command);
+  }
+}
+
+async function setScanModeForPlayer(mode, playerIndex) {
+  if (playerIndex === 2) {
+    if (state.p2) {
+      state.p2.scanEnabled = mode !== "OFF";
+    }
+
+    if (!state.connectedP2) {
+      return;
+    }
+
+    try {
+      await window.orderStackApi.writeP2(`SCAN:${mode}\n`);
+    } catch (error) {
+      addLog(`P2 SCAN WRITE ERROR: ${error.message}`);
+    }
+  } else {
+    if (state.p1) {
+      state.p1.scanEnabled = mode !== "OFF";
+    }
+
+    await setScanMode(mode);
+  }
+}
+
+async function setScanModeAll(mode) {
+  if (state.playerMode === "two") {
+    await Promise.all([setScanModeForPlayer(mode, 1), setScanModeForPlayer(mode, 2)]);
+  } else {
+    await setScanMode(mode);
+  }
+}
+
+async function sendLedCommandAll(command) {
+  if (state.playerMode === "two") {
+    await Promise.all([sendLedCommandToPlayer(command, 1), sendLedCommandToPlayer(command, 2)]);
+  } else {
+    await sendLedCommand(command);
   }
 }
 
@@ -661,70 +995,30 @@ function receiveScan(hole, uid) {
   }
 
   if (round.mode === "MEMORY") {
-    if (state.playerMode === "two" && round.players) {
-      const player = round.players[hole];
-
-      if (!player) {
-        return;
-      }
-
-      if (uid === player.lastAcceptedUid) {
-        addLog(`IGNORED DUPLICATE MEMORY TAG: ${hole} ${uid}`);
-        return;
-      }
-
-      const position = player.actual.length;
-
-      if (position >= round.expected.length) {
-        return;
-      }
-
-      expected = round.expected[position];
-      actual = tag ? tag[round.attribute] : "UNKNOWN";
-      correct = actual === expected;
-
-      if (!player.startedAt) {
-        player.startedAt = timestamp;
-      }
-
-      player.lastAcceptedUid = uid;
-      player.actual.push({ hole, value: actual, tag, correct, timestamp });
-      player.elapsedMs = timestamp - player.startedAt;
-
-      if (player.actual.length >= round.expected.length && !player.finishedAt) {
-        player.finishedAt = timestamp;
-        player.elapsedMs = player.finishedAt - player.startedAt;
-      }
-
-      renderMemory();
-      animateCat(hole === "LEFT" ? "memory-left-cat" : "memory-right-cat", tag);
-      roundComplete = Object.values(round.players).every((item) => item.actual.length >= round.expected.length);
-    } else {
-      if (hole !== round.hole) {
-        addLog(`IGNORED WRONG HOLE DURING MEMORY: ${hole}`);
-        return;
-      }
-
-      if (uid === round.lastAcceptedUid) {
-        addLog(`IGNORED DUPLICATE MEMORY TAG: ${uid}`);
-        return;
-      }
-
-      const position = round.actual.length;
-
-      if (position >= round.expected.length) {
-        return;
-      }
-
-      expected = round.expected[position];
-      actual = tag ? tag[round.attribute] : "UNKNOWN";
-      correct = actual === expected;
-      round.lastAcceptedUid = uid;
-      round.actual.push({ hole, value: actual, tag, correct });
-      renderMemory();
-      animateCat("memory-cat", tag);
-      roundComplete = round.actual.length >= round.expected.length;
+    if (hole !== round.hole) {
+      addLog(`IGNORED WRONG HOLE DURING MEMORY: ${hole}`);
+      return;
     }
+
+    if (uid === round.lastAcceptedUid) {
+      addLog(`IGNORED DUPLICATE MEMORY TAG: ${uid}`);
+      return;
+    }
+
+    const position = round.actual.length;
+
+    if (position >= round.expected.length) {
+      return;
+    }
+
+    expected = round.expected[position];
+    actual = tag ? tag[round.attribute] : "UNKNOWN";
+    correct = actual === expected;
+    round.lastAcceptedUid = uid;
+    round.actual.push({ hole, value: actual, tag, correct });
+    renderMemory();
+    animateCat("memory-cat", tag);
+    roundComplete = round.actual.length >= round.expected.length;
   } else {
     const holeState = round.holes[hole];
 
@@ -780,8 +1074,6 @@ function receiveScan(hole, uid) {
   state.scans.push({
     round: state.roundIndex + 1,
     mode: round.mode,
-    playerMode: state.playerMode,
-    player: round.mode === "MEMORY" && state.playerMode === "two" ? hole : null,
     timestamp,
     hole,
     uid,
@@ -836,18 +1128,268 @@ async function completeRound(timestamp) {
 
   if (state.currentRound.mode === "MEMORY") {
     state.phase = "MEMORY_COMPLETE";
-    if (state.playerMode === "two" && state.currentRound.players) {
-      renderTwoPlayerMemoryComplete();
-    } else {
-      renderMemoryComplete(perfectRound);
-      state.transitionTimer = window.setTimeout(renderLevelUp, 1600);
-    }
+    renderMemoryComplete(perfectRound);
+    state.transitionTimer = window.setTimeout(renderLevelUp, 1600);
     return;
   }
 
   state.phase = "SORTING_COMPLETE";
   state.lastSortingRuleSnapshot = snapshotSortingRule(state.currentRound);
   renderSortingComplete();
+}
+
+function receiveScanForPlayer(playerState, hole, uid, playerIndex) {
+  if (!playerState || playerState.roundDone) {
+    return;
+  }
+
+  const tag = TAGS[uid] || null;
+  const timestamp = performance.now();
+  const round = playerState.currentRound;
+
+  if (!round || !["LEFT", "RIGHT"].includes(hole)) {
+    return;
+  }
+
+  const recent = playerState.recentScans[hole];
+
+  if (recent && recent.uid === uid && timestamp - recent.timestamp < SAME_TAG_COOLDOWN_MS) {
+    addLog(`P${playerIndex} IGNORED COOLDOWN: ${hole} ${uid}`);
+    return;
+  }
+
+  let expected;
+  let actual = "UNKNOWN";
+  let correct = false;
+  let roundDoneNow = false;
+
+  if (round.mode === "MEMORY") {
+    if (hole !== round.hole) {
+      addLog(`P${playerIndex} IGNORED WRONG HOLE: ${hole}`);
+      return;
+    }
+
+    if (uid === round.lastAcceptedUid) {
+      addLog(`P${playerIndex} IGNORED DUPLICATE: ${uid}`);
+      return;
+    }
+
+    const position = round.actual.length;
+
+    if (position >= round.expected.length) {
+      return;
+    }
+
+    expected = round.expected[position];
+    actual = tag ? tag[round.attribute] : "UNKNOWN";
+    correct = actual === expected;
+
+    if (!round.startedAt) {
+      round.startedAt = timestamp;
+    }
+
+    round.lastAcceptedUid = uid;
+    round.actual.push({ hole, value: actual, tag, correct, timestamp });
+    round.elapsedMs = timestamp - round.startedAt;
+
+    if (round.actual.length >= round.expected.length && !round.finishedAt) {
+      round.finishedAt = timestamp;
+      round.elapsedMs = round.finishedAt - round.startedAt;
+    }
+
+    playerState.recentScans[hole] = { uid, timestamp };
+    sendLedCommandToPlayer(`LED:SCAN:${hole}`, playerIndex);
+    triggerScreenHalo(playerIndex === 1 ? "LEFT" : "RIGHT");
+    renderTwoPlayerMemoryInput();
+    animateCat(`p${playerIndex}-memory-cat`, tag);
+
+    playerState.scans.push({
+      round: state.roundIndex + 1,
+      mode: "MEMORY",
+      timestamp,
+      hole,
+      uid,
+      expected,
+      actual,
+      correct,
+      tokenColor: tag?.color || null,
+      tokenShape: tag?.shape || null
+    });
+
+    roundDoneNow = round.actual.length >= round.expected.length;
+  } else {
+    const holeState = round.holes[hole];
+
+    if (!holeState || holeState.count >= holeState.target) {
+      return;
+    }
+
+    expected = holeState.expected;
+    actual = tag ? tag[round.attribute] : "UNKNOWN";
+    correct = actual === expected;
+    const expectedHole = _expectedHoleForRound(round, tag);
+    const previousExpectedHole = round.isSwitchRound
+      ? expectedHoleForSnapshot(round.previousRule, tag)
+      : null;
+    const reactionTimeMs = timestamp - (round.lastTrialTimestamp || state.currentRound.roundStartTime || timestamp);
+    const isPerseverativeError = Boolean(!correct && previousExpectedHole && previousExpectedHole === hole);
+
+    if (!holeState.startedAt) {
+      holeState.startedAt = timestamp;
+    }
+
+    round.lastTrialTimestamp = timestamp;
+    holeState.count += 1;
+    holeState.elapsedMs = timestamp - holeState.startedAt;
+
+    if (holeState.count >= holeState.target && !holeState.finishedAt) {
+      holeState.finishedAt = timestamp;
+      holeState.elapsedMs = holeState.finishedAt - holeState.startedAt;
+    }
+
+    round.trials.push({
+      blockNumber: round.blockNumber,
+      ruleType: round.attribute,
+      previousRuleType: round.previousRule?.attribute || null,
+      isSwitchTrial: round.isSwitchRound,
+      tokenColor: tag?.color || null,
+      tokenShape: tag?.shape || null,
+      expectedHole,
+      placedHole: hole,
+      reactionTimeMs,
+      isCorrect: correct,
+      isPerseverativeError
+    });
+
+    playerState.recentScans[hole] = { uid, timestamp };
+    sendLedCommandToPlayer(`LED:SCAN:${hole}`, playerIndex);
+    triggerScreenHalo(playerIndex === 1 ? "LEFT" : "RIGHT");
+    renderTwoPlayerSorting();
+    animateCat(`p${playerIndex}-${hole.toLowerCase()}-cat`, tag);
+
+    playerState.scans.push({
+      round: state.roundIndex + 1,
+      mode: "SORTING",
+      timestamp,
+      hole,
+      uid,
+      expected,
+      actual,
+      correct,
+      reactionTimeMs: round.trials.at(-1)?.reactionTimeMs || 0,
+      expectedHole: expectedHole || null,
+      placedHole: hole,
+      blockNumber: round.blockNumber,
+      ruleType: round.attribute,
+      previousRuleType: round.previousRule?.attribute || null,
+      isSwitchTrial: round.isSwitchRound,
+      isPerseverativeError,
+      tokenColor: tag?.color || null,
+      tokenShape: tag?.shape || null
+    });
+
+    roundDoneNow = Object.values(round.holes).every((h) => h.count >= h.target);
+  }
+
+  if (roundDoneNow) {
+    playerState.roundDone = true;
+    playerState.scanEnabled = false;
+    setScanModeForPlayer("OFF", playerIndex);
+    _checkTwoPlayerRoundComplete();
+  }
+}
+
+function _expectedHoleForRound(round, tag) {
+  if (!tag) {
+    return null;
+  }
+
+  const value = tag[round.attribute];
+
+  if (round.holes.LEFT.expected === value) {
+    return "LEFT";
+  }
+
+  if (round.holes.RIGHT.expected === value) {
+    return "RIGHT";
+  }
+
+  return null;
+}
+
+function _checkTwoPlayerRoundComplete() {
+  if (!state.p1.roundDone || !state.p2.roundDone) {
+    return;
+  }
+
+  _completeTwoPlayerRound();
+}
+
+async function _completeTwoPlayerRound() {
+  const mode = state.currentRound.mode;
+  const roundNumber = state.roundIndex + 1;
+
+  const buildRecord = (playerState) => {
+    const round = playerState.currentRound;
+    const roundScans = playerState.scans.filter((s) => s.round === roundNumber);
+    let seconds;
+
+    if (round.mode === "MEMORY") {
+      seconds = (round.elapsedMs || 0) / 1000;
+    } else {
+      const endMs = Math.max(
+        ...Object.values(round.holes).map((h) => h.finishedAt || h.startedAt || 0)
+      );
+      const startMs = Math.min(
+        ...Object.values(round.holes).map((h) => h.startedAt || endMs)
+      );
+      seconds = (endMs - startMs) / 1000 || 0;
+    }
+
+    return {
+      round: roundNumber,
+      mode: round.mode,
+      attribute: round.attribute,
+      seconds: Math.max(seconds, 0),
+      correct: roundScans.filter((s) => s.correct).length,
+      total: roundScans.length,
+      sortingRoundNumber: round.sortingRoundNumber || null,
+      blockNumber: round.blockNumber || null,
+      roundInBlock: round.roundInBlock || null,
+      switchFromRule: round.previousRule?.attribute || null,
+      isSwitchRound: Boolean(round.isSwitchRound)
+    };
+  };
+
+  state.p1.records.push(buildRecord(state.p1));
+  state.p2.records.push(buildRecord(state.p2));
+  state.p1.lastRoundSeconds = state.p1.records.at(-1).seconds;
+  state.p2.lastRoundSeconds = state.p2.records.at(-1).seconds;
+
+  if (mode === "SORTING") {
+    state.p1.lastSortingRuleSnapshot = snapshotSortingRule(state.p1.currentRound);
+    state.p2.lastSortingRuleSnapshot = snapshotSortingRule(state.p2.currentRound);
+  }
+
+  await delay(RESULT_LED_DELAY_MS);
+
+  const p1Scans = state.p1.scans.filter((s) => s.round === roundNumber);
+  const p2Scans = state.p2.scans.filter((s) => s.round === roundNumber);
+  const p1Perfect = p1Scans.length > 0 && p1Scans.every((s) => s.correct);
+  const p2Perfect = p2Scans.length > 0 && p2Scans.every((s) => s.correct);
+
+  await Promise.all([
+    sendLedCommandToPlayer(p1Perfect ? "LED:SUCCESS" : "LED:ERROR", 1),
+    sendLedCommandToPlayer(p2Perfect ? "LED:SUCCESS" : "LED:ERROR", 2)
+  ]);
+
+  if (mode === "MEMORY") {
+    state.phase = "MEMORY_COMPLETE";
+    renderTwoPlayerMemoryRoundResult();
+  } else {
+    state.phase = "SORTING_COMPLETE";
+    renderTwoPlayerSortingRoundResult();
+  }
 }
 
 async function toggleRegScan() {
@@ -947,18 +1489,37 @@ function renderHome() {
           <button id="single-player-button" class="${state.playerMode === "single" ? "selected" : ""}" type="button">${t("onePlayer")}</button>
           <button id="two-player-button" class="${state.playerMode === "two" ? "selected" : ""}" type="button">${t("twoPlayers")}</button>
         </div>
-        <form id="participant-form" class="participant-form panel">
-          <p>${t("participantHint")}</p>
-          <label>
-            <span>${t("participantName")}</span>
-            <input id="participant-name-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.name)}" />
-          </label>
-        </form>
-        <div class="hero-cat-wrap">
-          ${cat("hero-cat", "hero-cat")}
+        ${state.playerMode === "two" ? `
+          <form id="participant-form" class="participant-form panel two-player-form">
+            <p>${t("participantHint")}</p>
+            <label>
+              <span>${t("leftPlayer")}</span>
+              <input id="participant-name-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.name)}" />
+            </label>
+            <label>
+              <span>${t("rightPlayer")}</span>
+              <input id="participant-name-input-p2" type="text" autocomplete="off" value="${escapeHtml(state.participant2.name)}" />
+            </label>
+          </form>
+        ` : `
+          <form id="participant-form" class="participant-form panel">
+            <p>${t("participantHint")}</p>
+            <label>
+              <span>${t("participantName")}</span>
+              <input id="participant-name-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.name)}" />
+            </label>
+          </form>
+        `}
+        <div class="hero-cat-wrap${state.playerMode === "two" ? " two-cats" : ""}">
+          ${state.playerMode === "two" ? `
+            ${cat("hero-cat hero-cat-left", "hero-cat-left")}
+            ${cat("hero-cat hero-cat-right pink-cat", "hero-cat-right")}
+          ` : `
+            ${cat("hero-cat", "hero-cat")}
+          `}
           <button id="start-cat-button" class="cat-start-button" type="button">${t("start")}</button>
         </div>
-        <p class="press-start">${t("pressStart")}</p>
+        ${state.playerMode === "two" ? `<p class="press-start">${t("pressStart")}</p>` : ""}
       </div>
     </section>
   `;
@@ -966,7 +1527,6 @@ function renderHome() {
     event.preventDefault();
     startSession();
   });
-<<<<<<< HEAD
   document.querySelector("#single-player-button").addEventListener("click", () => {
     cacheParticipantForm();
     state.playerMode = "single";
@@ -977,48 +1537,7 @@ function renderHome() {
     state.playerMode = "two";
     renderHome();
   });
-  document.querySelector("#start-cat-button").addEventListener("click", startTutorialSession);
-}
-
-function renderTutorial() {
-  state.phase = "TUTORIAL";
-  setScene("play");
-  setHudProgress(8);
-  updateLanguageToggle();
-  elements.gameScreen.innerHTML = `
-    <section class="tutorial-screen">
-      <div class="tutorial-copy panel">
-        <p class="instruction-kicker">${t("tutorial")}</p>
-        <h2>${t("hungry")}</h2>
-        <p>${t("tutorialLine1")}</p>
-        <p>${t("tutorialLine2")}</p>
-      </div>
-      <div class="tutorial-cats">
-        <section id="tutorial-left-card" class="tutorial-cat-card panel">
-          <p class="hole-title">${t("leftHole")}</p>
-          <div class="tutorial-light" aria-hidden="true"></div>
-          <div class="tutorial-cat-wrap">
-            ${cat("tutorial-cat pink-cat", "tutorial-left-cat")}
-          </div>
-          <strong id="tutorial-left-status" class="tutorial-status">${t("tryLeft")}</strong>
-        </section>
-        <section id="tutorial-right-card" class="tutorial-cat-card panel">
-          <p class="hole-title">${t("rightHole")}</p>
-          <div class="tutorial-light" aria-hidden="true"></div>
-          <div class="tutorial-cat-wrap">
-            ${cat("tutorial-cat blue-cat", "tutorial-right-cat")}
-          </div>
-          <strong id="tutorial-right-status" class="tutorial-status">${t("tryRight")}</strong>
-        </section>
-      </div>
-      <p id="tutorial-hint" class="key-hint">${t("tutorialHint")}</p>
-      <button id="tutorial-ok-button" class="ok-button tutorial-ok is-hidden" type="button" disabled>${t("ok")}</button>
-    </section>
-  `;
-  document.querySelector("#tutorial-ok-button").addEventListener("click", finishTutorial);
-=======
   document.querySelector("#start-cat-button").addEventListener("click", startSession);
->>>>>>> 5dd03da191f1b8d116596a4ede88d7b638929b26
 }
 
 function renderGameInstruction(mode) {
@@ -1132,11 +1651,68 @@ function renderMemory(secondsRemaining = null) {
   `;
 }
 
-function renderTwoPlayerMemoryInput() {
-  const round = state.currentRound;
-
+function renderTwoPlayerMemorize(secondsRemaining) {
   setHudProgress(progressForCurrentRound());
   updateLanguageToggle();
+
+  const renderSeq = (playerState, label) => {
+    const round = playerState.currentRound;
+    const boxes = round.expected.map((expected) => renderTokenBox(expected, round.attribute, true)).join("");
+
+    return `
+      <article class="memory-player-card panel">
+        <div class="player-title-row">
+          <h3>${label}</h3>
+          <span class="winner-badge">${round.expected.length}</span>
+        </div>
+        <div class="memory-grid memory-input-row">${boxes}</div>
+      </article>
+    `;
+  };
+
+  elements.gameScreen.innerHTML = `
+    <section class="two-player-memory-screen">
+      <div class="result-heading">
+        <h2 class="screen-heading">${t("rememberSequence")}</h2>
+        <div class="memory-timer" style="--timer-progress:${(secondsRemaining / (MEMORIZE_MS / 1000)) * 100}%">
+          <span>${secondsRemaining}</span>
+        </div>
+      </div>
+      <div class="duel-grid memory-duel-grid">
+        ${renderSeq(state.p1, t("leftPlayer"))}
+        ${renderSeq(state.p2, t("rightPlayer"))}
+      </div>
+    </section>
+  `;
+}
+
+function renderTwoPlayerMemoryInput() {
+  setHudProgress(progressForCurrentRound());
+  updateLanguageToggle();
+
+  const renderPanel = (playerState, label, catClass, catId) => {
+    const round = playerState.currentRound;
+    const boxes = round.expected.map((_, index) => {
+      const item = round.actual[index];
+      return renderTokenBox(item?.value, round.attribute, Boolean(item));
+    }).join("");
+    const done = round.actual.length >= round.expected.length;
+
+    return `
+      <article class="memory-player-card panel${done ? " done-panel" : ""}">
+        <div class="player-title-row">
+          <h3>${label}</h3>
+          <span class="winner-badge">${round.actual.length} / ${round.expected.length}</span>
+        </div>
+        <div class="memory-grid memory-input-row">${boxes}</div>
+        <div class="memory-input-cat-row">
+          ${cat(`${catClass} result-cat`, catId)}
+          <strong class="result-message">${done ? "✓" : t("keepFeeding")}</strong>
+        </div>
+      </article>
+    `;
+  };
+
   elements.gameScreen.innerHTML = `
     <section class="two-player-memory-screen">
       <div class="result-heading">
@@ -1144,35 +1720,10 @@ function renderTwoPlayerMemoryInput() {
         <p class="key-hint">${t("inputHint")}</p>
       </div>
       <div class="duel-grid memory-duel-grid">
-        ${renderMemoryPlayerInput("LEFT", t("leftPlayer"), "pink-cat")}
-        ${renderMemoryPlayerInput("RIGHT", t("rightPlayer"), "blue-cat")}
+        ${renderPanel(state.p1, t("leftPlayer"), "pink-cat", "p1-memory-cat")}
+        ${renderPanel(state.p2, t("rightPlayer"), "blue-cat", "p2-memory-cat")}
       </div>
     </section>
-  `;
-}
-
-function renderMemoryPlayerInput(hole, label, catClass) {
-  const round = state.currentRound;
-  const player = round.players[hole];
-  const boxes = round.expected.map((_, index) => {
-    const item = player.actual[index];
-    return renderTokenBox(item?.value, round.attribute, Boolean(item));
-  }).join("");
-
-  return `
-    <article class="memory-player-card panel">
-      <div class="player-title-row">
-        <h3>${label}</h3>
-        <span class="winner-badge">${player.actual.length} / ${round.expected.length}</span>
-      </div>
-      <div class="memory-grid memory-input-row">
-        ${boxes}
-      </div>
-      <div class="memory-input-cat-row">
-        ${cat(`${catClass} result-cat`, hole === "LEFT" ? "memory-left-cat" : "memory-right-cat")}
-        <strong class="result-message">${t("keepFeeding")}</strong>
-      </div>
-    </article>
   `;
 }
 
@@ -1202,10 +1753,10 @@ function renderMemoryComplete(perfect) {
   `;
 }
 
-function renderTwoPlayerMemoryComplete() {
-  const left = summarizeMemoryPlayer("LEFT");
-  const right = summarizeMemoryPlayer("RIGHT");
-  const winner = comparePlayers(left, right);
+function renderTwoPlayerMemoryRoundResult() {
+  const p1Sum = _summarizeTwoPlayerMemory(state.p1);
+  const p2Sum = _summarizeTwoPlayerMemory(state.p2);
+  const winner = comparePlayers(p1Sum, p2Sum);
 
   setHudProgress(progressForCompletedRound());
   updateLanguageToggle();
@@ -1216,8 +1767,8 @@ function renderTwoPlayerMemoryComplete() {
         <p class="key-hint">${t("winnerRule")}</p>
       </div>
       <div class="duel-grid">
-        ${renderMemoryResultPanel("LEFT", t("leftPlayer"), "pink-cat", left, winner === "LEFT")}
-        ${renderMemoryResultPanel("RIGHT", t("rightPlayer"), "blue-cat", right, winner === "RIGHT")}
+        ${_renderMemoryResultPanel(state.p1, t("leftPlayer"), "pink-cat", p1Sum, winner === "LEFT")}
+        ${_renderMemoryResultPanel(state.p2, t("rightPlayer"), "blue-cat", p2Sum, winner === "RIGHT")}
       </div>
       <button id="two-player-result-ok" class="ok-button result-ok-button" type="button">${t("ok")}</button>
     </section>
@@ -1225,8 +1776,24 @@ function renderTwoPlayerMemoryComplete() {
   document.querySelector("#two-player-result-ok").addEventListener("click", beginNextRound);
 }
 
-function renderMemoryResultPanel(hole, label, catClass, summary, isWinner) {
-  const round = state.currentRound;
+function _summarizeTwoPlayerMemory(playerState) {
+  const round = playerState.currentRound;
+  const total = round.expected.length;
+  const correct = round.actual.filter((item, index) => item.value === round.expected[index]).length;
+  const complete = round.actual.length >= total;
+
+  return {
+    actual: round.actual,
+    correct,
+    total,
+    complete,
+    elapsedMs: round.elapsedMs || 0,
+    score: scoreRound(correct, total, round.elapsedMs || 0, complete)
+  };
+}
+
+function _renderMemoryResultPanel(playerState, label, catClass, summary, isWinner) {
+  const round = playerState.currentRound;
   const status = isWinner ? t("winner") : t("runnerUp");
   const message = isWinner ? t("youWin") : t("betterLuck");
   const boxes = round.expected.map((expected, index) => {
@@ -1245,9 +1812,7 @@ function renderMemoryResultPanel(hole, label, catClass, summary, isWinner) {
         <h3>${label}</h3>
         <span class="winner-badge">${status}</span>
       </div>
-      <div class="memory-grid memory-input-row">
-        ${boxes}
-      </div>
+      <div class="memory-grid memory-input-row">${boxes}</div>
       <div class="score-card">
         <span>${t("score")}</span>
         <strong>${summary.score}</strong>
@@ -1323,10 +1888,6 @@ function renderSortingColumn(hole, holeState, attribute) {
 }
 
 function renderSortingComplete() {
-  if (state.playerMode === "two") {
-    renderTwoPlayerSortingComplete();
-    return;
-  }
 
   setHudProgress(progressForCompletedRound());
   updateLanguageToggle();
@@ -1345,10 +1906,61 @@ function renderSortingComplete() {
   document.querySelector("#sorting-complete-ok").addEventListener("click", beginNextRound);
 }
 
-function renderTwoPlayerSortingComplete() {
-  const left = summarizeSortingHole("LEFT");
-  const right = summarizeSortingHole("RIGHT");
-  const winner = comparePlayers(left, right);
+function renderTwoPlayerSorting() {
+  const p1Round = state.p1.currentRound;
+  const p2Round = state.p2.currentRound;
+  const instruction1 = p1Round.attribute === "shape" ? t("sortingShape") : t("sortingColor");
+  const instruction2 = p2Round.attribute === "shape" ? t("sortingShape") : t("sortingColor");
+
+  setHudProgress(progressForCurrentRound());
+  updateLanguageToggle();
+  elements.gameScreen.innerHTML = `
+    <section class="two-player-sorting-screen">
+      <div class="two-player-sorting-grid">
+        <div class="sorting-player-half">
+          <p class="sorting-player-label">${t("leftPlayer")}</p>
+          <p class="key-hint sorting-rule-hint">${instruction1}</p>
+          <div class="sorting-columns">
+            ${_renderTwoPlayerSortColumn("LEFT", p1Round.holes.LEFT, p1Round.attribute, "p1-left-cat")}
+            ${_renderTwoPlayerSortColumn("RIGHT", p1Round.holes.RIGHT, p1Round.attribute, "p1-right-cat")}
+          </div>
+        </div>
+        <div class="sorting-player-half">
+          <p class="sorting-player-label">${t("rightPlayer")}</p>
+          <p class="key-hint sorting-rule-hint">${instruction2}</p>
+          <div class="sorting-columns">
+            ${_renderTwoPlayerSortColumn("LEFT", p2Round.holes.LEFT, p2Round.attribute, "p2-left-cat")}
+            ${_renderTwoPlayerSortColumn("RIGHT", p2Round.holes.RIGHT, p2Round.attribute, "p2-right-cat")}
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function _renderTwoPlayerSortColumn(hole, holeState, attribute, catId) {
+  const catClass = hole === "LEFT" ? "pink-cat" : "blue-cat";
+
+  return `
+    <section class="sort-card panel">
+      <div class="rule-row">
+        ${renderRuleTile(holeState.expected, attribute)}
+        <div class="count-panel">
+          <span>${t("itemsScanned")}</span>
+          <strong><span>${holeState.count}</span> / ${holeState.target}</strong>
+        </div>
+      </div>
+      <div class="sort-monster-row">
+        ${cat(`sort-cat ${catClass}`, catId)}
+      </div>
+    </section>
+  `;
+}
+
+function renderTwoPlayerSortingRoundResult() {
+  const p1Sum = _summarizeTwoPlayerSorting(state.p1);
+  const p2Sum = _summarizeTwoPlayerSorting(state.p2);
+  const winner = comparePlayers(p1Sum, p2Sum);
 
   setHudProgress(progressForCompletedRound());
   updateLanguageToggle();
@@ -1359,13 +1971,32 @@ function renderTwoPlayerSortingComplete() {
         <p class="key-hint">${t("winnerRule")}</p>
       </div>
       <div class="duel-grid sorting-outcome-grid">
-        ${renderSortingResultPanel("LEFT", t("leftPlayer"), "pink-cat", left, winner === "LEFT")}
-        ${renderSortingResultPanel("RIGHT", t("rightPlayer"), "blue-cat", right, winner === "RIGHT")}
+        ${renderSortingResultPanel("LEFT", t("leftPlayer"), "pink-cat", p1Sum, winner === "LEFT")}
+        ${renderSortingResultPanel("RIGHT", t("rightPlayer"), "blue-cat", p2Sum, winner === "RIGHT")}
       </div>
       <button id="two-player-sorting-ok" class="ok-button result-ok-button" type="button">${t("ok")}</button>
     </section>
   `;
   document.querySelector("#two-player-sorting-ok").addEventListener("click", beginNextRound);
+}
+
+function _summarizeTwoPlayerSorting(playerState) {
+  const round = playerState.currentRound;
+  const roundNumber = state.roundIndex + 1;
+  const roundScans = playerState.scans.filter((s) => s.round === roundNumber);
+  const totalTarget = Object.values(round.holes).reduce((sum, h) => sum + h.target, 0);
+  const correct = roundScans.filter((s) => s.correct).length;
+  const complete = Object.values(round.holes).every((h) => h.count >= h.target);
+  const maxElapsedMs = Math.max(...Object.values(round.holes).map((h) => h.elapsedMs || 0));
+
+  return {
+    actual: roundScans,
+    correct,
+    total: totalTarget,
+    complete,
+    elapsedMs: maxElapsedMs,
+    score: scoreRound(correct, totalTarget, maxElapsedMs, complete)
+  };
 }
 
 function renderSortingResultPanel(hole, label, catClass, summary, isWinner) {
@@ -1389,6 +2020,71 @@ function renderSortingResultPanel(hole, label, catClass, summary, isWinner) {
       </div>
     </article>
   `;
+}
+
+function renderTwoPlayerFinalScreen() {
+  state.phase = "FINAL";
+  Promise.all([
+    sendLedCommandToPlayer("LED:RAINBOW", 1),
+    sendLedCommandToPlayer("LED:RAINBOW", 2)
+  ]);
+  setScene("play");
+  setHudProgress(100);
+  updateLanguageToggle();
+
+  const buildScore = (playerState) => {
+    const scans = playerState.scans;
+    const total = scans.length;
+    const correct = scans.filter((s) => s.correct).length;
+    const accuracy = total ? Math.round((correct / total) * 100) : 0;
+    const totalSeconds = playerState.records.reduce((sum, r) => sum + r.seconds, 0);
+    const score = Math.round((accuracy / 100) * 800 + Math.min(200, 15000 / Math.max(totalSeconds, 1)));
+    return { score, accuracy, totalSeconds };
+  };
+
+  const p1Stats = buildScore(state.p1);
+  const p2Stats = buildScore(state.p2);
+  const overallWinner = p1Stats.score >= p2Stats.score ? "p1" : "p2";
+
+  const p1Payload = buildTwoPlayerSessionPayload(state.p1, p1Stats);
+  const p2Payload = buildTwoPlayerSessionPayload(state.p2, p2Stats);
+
+  const renderPlayerCard = (playerState, stats, label, catClass, isWinner) => `
+    <article class="player-panel final-player-panel ${isWinner ? "winner" : ""}">
+      <div class="player-title-row">
+        <h3>${escapeHtml(playerState.participantName)}</h3>
+        <span class="winner-badge">${isWinner ? t("winner") : t("runnerUp")}</span>
+      </div>
+      <p class="final-player-label">${label}</p>
+      <div class="score-card">
+        <span>${t("score")}</span>
+        <strong>${stats.score}</strong>
+      </div>
+      <div class="summary-row">
+        <div><span>${t("accuracy")}</span><strong>${stats.accuracy}%</strong></div>
+        <div><span>${t("activeTime")}</span><strong>${formatDuration(stats.totalSeconds)}</strong></div>
+      </div>
+      <div class="player-message-row">
+        ${isWinner ? sparkles() : ""}
+        ${cat(`${catClass} result-cat ${isWinner ? "happy-cat" : ""}`)}
+        <strong class="result-message">${isWinner ? t("youWin") : t("betterLuck")}</strong>
+      </div>
+    </article>
+  `;
+
+  elements.gameScreen.innerHTML = `
+    <section class="final-screen two-player-final-screen">
+      <h2 class="screen-heading">${t("greatJob")}</h2>
+      <div class="duel-grid two-player-final-grid">
+        ${renderPlayerCard(state.p1, p1Stats, t("leftPlayer"), "pink-cat", overallWinner === "p1")}
+        ${renderPlayerCard(state.p2, p2Stats, t("rightPlayer"), "blue-cat", overallWinner === "p2")}
+      </div>
+      <div id="database-status" class="database-status">${t("databaseSaving")}</div>
+      <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
+    </section>
+  `;
+  document.querySelector("#home-button").addEventListener("click", goHome);
+  saveTwoPlayerSession(p1Payload, p2Payload);
 }
 
 function renderFinalScreen() {
@@ -1450,41 +2146,6 @@ function renderFinalScreen() {
   saveCompletedSession(sessionPayload);
 }
 
-function summarizeMemoryPlayer(hole) {
-  const round = state.currentRound;
-  const player = round.players[hole];
-  const total = round.expected.length;
-  const correct = player.actual.filter((item, index) => item.value === round.expected[index]).length;
-  const complete = player.actual.length >= total;
-
-  return {
-    actual: player.actual,
-    correct,
-    total,
-    complete,
-    elapsedMs: player.elapsedMs || 0,
-    score: scoreRound(correct, total, player.elapsedMs || 0, complete)
-  };
-}
-
-function summarizeSortingHole(hole) {
-  const round = state.currentRound;
-  const holeState = round.holes[hole];
-  const roundNumber = state.roundIndex + 1;
-  const holeScans = state.scans.filter((scan) => scan.round === roundNumber && scan.hole === hole);
-  const total = holeState.target;
-  const correct = holeScans.filter((scan) => scan.correct).length;
-  const complete = holeState.count >= holeState.target;
-
-  return {
-    actual: holeScans,
-    correct,
-    total,
-    complete,
-    elapsedMs: holeState.elapsedMs || 0,
-    score: scoreRound(correct, total, holeState.elapsedMs || 0, complete)
-  };
-}
 
 function scoreRound(correct, total, elapsedMs, complete) {
   if (!total) {
@@ -1576,6 +2237,19 @@ function readParticipantForm() {
     return null;
   }
 
+  if (state.playerMode === "two") {
+    const p2Input = document.querySelector("#participant-name-input-p2");
+    const participantName2 = state.participant2.name;
+
+    if (!participantName2) {
+      addLog("Player 2 name is required before starting.");
+      p2Input?.focus();
+      return null;
+    }
+
+    return { participantName, participantName2 };
+  }
+
   return { participantName };
 }
 
@@ -1584,6 +2258,12 @@ function cacheParticipantForm() {
 
   if (nameInput) {
     state.participant.name = nameInput.value.trim();
+  }
+
+  const p2Input = document.querySelector("#participant-name-input-p2");
+
+  if (p2Input) {
+    state.participant2.name = p2Input.value.trim();
   }
 }
 
@@ -1673,8 +2353,8 @@ function buildGame2Trials(game2Scans) {
   }));
 }
 
-function buildGame2Blocks(game2Trials) {
-  const sortingRecords = state.records.filter((record) => record.mode === "SORTING");
+function buildGame2Blocks(game2Trials, sortingRecords = null) {
+  sortingRecords = sortingRecords || state.records.filter((record) => record.mode === "SORTING");
   const blocks = [];
 
   for (let blockNumber = 1; blockNumber <= 3; blockNumber++) {
@@ -1752,6 +2432,67 @@ async function saveCompletedSession(sessionPayload) {
     updateDatabaseStatus(null, error);
     addLog(`DATABASE ERROR: ${error.message}`);
   }
+}
+
+function buildTwoPlayerSessionPayload(playerState, stats) {
+  const game1Scans = playerState.scans.filter((s) => s.mode === "MEMORY");
+  const game2Scans = playerState.scans.filter((s) => s.mode === "SORTING");
+  const game2Trials = buildGame2Trials(game2Scans);
+  const sortingRecords = playerState.records.filter((r) => r.mode === "SORTING");
+  const game2Blocks = buildGame2Blocks(game2Trials, sortingRecords);
+
+  return {
+    participant: {
+      participantId: playerState.participantId,
+      participantName: playerState.participantName
+    },
+    matchId: state.matchId,
+    totalScore: stats.score,
+    totalAccuracy: stats.accuracy,
+    totalGameTimeMs: Math.round(stats.totalSeconds * 1000),
+    game1Accuracy: accuracyForScans(game1Scans),
+    game2Accuracy: accuracyForScans(game2Scans),
+    executiveMetrics: buildExecutiveMetrics(game2Trials, game2Blocks),
+    game2Blocks,
+    game2Trials,
+    dataQualityFlag: "valid"
+  };
+}
+
+async function saveTwoPlayerSession(p1Payload, p2Payload) {
+  if (state.sessionSaved) {
+    return;
+  }
+
+  state.sessionSaved = true;
+
+  const saveOne = async (payload, label) => {
+    try {
+      const result = await window.orderStackApi.saveGameSession(payload);
+      addLog(`DATABASE SAVED ${label}: ${result.sessionId}`);
+      return result;
+    } catch (error) {
+      addLog(`DATABASE ERROR ${label}: ${error.message}`);
+      return null;
+    }
+  };
+
+  const r1 = await saveOne(p1Payload, "P1");
+  const r2 = await saveOne(p2Payload, "P2");
+  const status = document.querySelector("#database-status");
+
+  if (!status) {
+    return;
+  }
+
+  if (!r1 || !r2) {
+    status.classList.add("database-error");
+    status.textContent = `${t("databaseError")}`;
+    return;
+  }
+
+  status.classList.remove("database-error");
+  status.innerHTML = `<strong>${t("databaseSaved")}</strong>`;
 }
 
 function updateDatabaseStatus(result, error = null) {

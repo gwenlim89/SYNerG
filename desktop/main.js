@@ -6,6 +6,7 @@ const database = require("./database");
 
 let mainWindow;
 let activePort;
+let port2;
 let databaseReady;
 
 function createWindow() {
@@ -113,15 +114,48 @@ ipcMain.handle("db:save-game-session", async (_event, payload) => {
   return database.saveGameSession(payload);
 });
 
-async function closePort() {
-  if (!activePort?.isOpen) {
-    activePort = null;
-    return;
+ipcMain.handle("db:create-match", async () => {
+  await databaseReady;
+  return database.createMatch();
+});
+
+ipcMain.handle("serial:connect-p2", async (_event, portPath) => {
+  if (port2?.isOpen) {
+    const p = port2;
+    port2 = null;
+    await new Promise((resolve) => p.close(() => resolve()));
   }
 
-  const port = activePort;
+  port2 = new SerialPort({ path: portPath, baudRate: 115200, autoOpen: false });
+
+  await new Promise((resolve, reject) => {
+    port2.open((error) => error ? reject(error) : resolve());
+  });
+
+  const parser = port2.pipe(new ReadlineParser({ delimiter: "\n" }));
+  parser.on("data", (line) => send("serial:line-p2", line.trim()));
+  port2.on("error", (error) => send("serial:error-p2", error.message));
+  port2.on("close", () => send("serial:closed-p2"));
+
+  send("serial:line-p2", `CONNECTED|PORT:${portPath}`);
+  return { path: portPath };
+});
+
+ipcMain.handle("serial:write-p2", async (_event, text) => {
+  if (!port2?.isOpen) {
+    throw new Error("P2 serial port is not connected.");
+  }
+
+  await new Promise((resolve, reject) => {
+    port2.write(text, (error) => error ? reject(error) : resolve());
+  });
+});
+
+async function closePort() {
+  const toClose = [activePort, port2].filter((p) => p?.isOpen);
   activePort = null;
-  await new Promise((resolve) => port.close(() => resolve()));
+  port2 = null;
+  await Promise.all(toClose.map((p) => new Promise((resolve) => p.close(() => resolve()))));
 }
 
 function send(channel, payload) {

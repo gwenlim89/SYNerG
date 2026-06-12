@@ -270,7 +270,7 @@ button {
   z-index: 12;
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 4px;
   margin-top: -24px;
 }
 
@@ -327,9 +327,9 @@ button {
   display: grid;
   grid-template-columns: 1fr;
   justify-items: center;
-  gap: 15px 21px;
+  gap: 10px;
   width: min(930px, 78vw);
-  padding: 18px 24px 21px;
+  padding: 12px 18px 14px;
   text-align: center;
 }
 
@@ -369,22 +369,41 @@ button {
 
 .hero-cat-wrap {
   position: relative;
-  width: 300px;
-  height: 330px;
+  width: 220px;
+  height: 160px;
+  margin-top: -20px;
 }
 
 .pixel-cat.hero-cat {
   left: 50%;
-  bottom: 0;
-  width: 300px;
+  bottom: -100px;
+  width: 220px;
   transform: translateX(-50%);
+}
+
+.hero-cat-wrap.two-cats {
+  width: 460px;
+}
+
+.hero-cat-wrap.two-cats .pixel-cat.hero-cat {
+  width: 180px;
+  transform: none;
+}
+
+.hero-cat-wrap.two-cats .pixel-cat.hero-cat-left {
+  left: 20px;
+}
+
+.hero-cat-wrap.two-cats .pixel-cat.hero-cat-right {
+  right: 20px;
+  left: auto;
 }
 
 .cat-start-button {
   position: absolute;
   z-index: 20;
   left: 50%;
-  top: 212px;
+  top: 140px;
   min-width: 118px;
   min-height: 48px;
   border: 5px solid var(--outline);
@@ -1764,4 +1783,152 @@ select {
   .debug-row {
     display: grid;
   }
+}
+
+/* ── Settings: Player labels ───────────────────────────────────────────── */
+.connection-label {
+  margin: 12px 0 4px;
+  color: var(--outline);
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* ── Home: Two-player name form ────────────────────────────────────────── */
+.two-player-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+  align-items: start;
+}
+
+.two-player-form > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.two-player-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.two-player-form label span {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--outline);
+}
+
+/* ── Memory input: Done state ──────────────────────────────────────────── */
+.done-panel {
+  border-color: #2563b0;
+  background: #d5eaf8;
+}
+
+.done-panel .winner-badge {
+  background: #2563b0;
+}
+
+.done-panel .result-message {
+  background: #d5eaf8;
+  color: #1a4e8a;
+}
+
+/* ── Two-player sorting screen ─────────────────────────────────────────── */
+.two-player-sorting-screen {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  margin: -8px -18px -34px;
+  min-height: 100%;
+}
+
+.two-player-sorting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.sorting-player-half {
+  display: grid;
+  gap: 8px;
+}
+
+.sorting-player-label {
+  margin: 0;
+  padding: 6px 10px;
+  border: 4px solid var(--outline);
+  background: var(--outline);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.sorting-rule-hint {
+  margin: 0;
+  text-align: center;
+}
+
+.sorting-player-half .sorting-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sorting-player-half .sort-card {
+  min-height: 280px;
+}
+
+/* ── Two-player final screen ───────────────────────────────────────────── */
+.two-player-final-screen {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  margin: -8px -18px -34px;
+}
+
+.two-player-final-grid {
+  min-height: 380px;
+}
+
+.final-player-panel {
+  grid-template-rows: auto auto auto auto 1fr;
+}
+
+.final-player-label {
+  margin: 0;
+  color: #2f6fff;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.final-player-panel .summary-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.final-player-panel .summary-row > div {
+  display: grid;
+  gap: 2px;
+}
+
+.final-player-panel .summary-row span {
+  color: #2f6fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.final-player-panel .summary-row strong {
+  color: var(--outline);
+  font-size: 1.2rem;
+  font-weight: 900;
+  line-height: 1;
 }
