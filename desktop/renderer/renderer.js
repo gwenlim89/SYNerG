@@ -987,9 +987,9 @@ function renderGameInstruction(mode) {
         <div class="shape-forest" aria-hidden="true">
           ${shapeTree("TRIANGLE", "tree-one")}
           ${shapeTree("SQUARE", "tree-two")}
-          ${shapeTree("OVAL", "tree-three")}
+          ${shapeTree("CIRCLE", "tree-three")}
           ${shapeTree("HEXAGON", "tree-four")}
-          ${shapeTree("PENTAGON", "tree-five")}
+          ${shapeTree("HEART", "tree-five")}
         </div>
         <div class="instruction-cat-wrap">
           ${cat("hero-cat instruction-cat")}
@@ -1011,9 +1011,9 @@ function renderGameInstruction(mode) {
         <div class="shape-forest" aria-hidden="true">
           ${shapeTree("TRIANGLE", "tree-one")}
           ${shapeTree("SQUARE", "tree-two")}
-          ${shapeTree("OVAL", "tree-three")}
+          ${shapeTree("CIRCLE", "tree-three")}
           ${shapeTree("HEXAGON", "tree-four")}
-          ${shapeTree("PENTAGON", "tree-five")}
+          ${shapeTree("HEART", "tree-five")}
         </div>
         <div class="instruction-cat-wrap two-cat-instruction">
           ${cat("instruction-cat pink-cat")}
