@@ -416,14 +416,15 @@ function rateExecutive(payload, metrics, baseline) {
     reasons.push(`Switch-trial error cost increased ${switchErrorIncrease.toFixed(1)} percentage points.`);
   }
 
-  const perseverativeIncrease = Number(metrics.perseverativeErrors) - Number(baseline.baseline_perseverative_errors);
+  const perseverativeErrors = Number(metrics.perseverativeErrors);
+  const perseverativeIncrease = perseverativeErrors - Number(baseline.baseline_perseverative_errors);
 
-  if (Number(metrics.perseverativeErrors) >= 3 || perseverativeIncrease >= 2) {
+  if (perseverativeIncrease >= 2) {
     rating = "flagged";
-    reasons.push(`Perseverative errors increased to ${metrics.perseverativeErrors}.`);
+    reasons.push(`Perseverative errors increased by ${perseverativeIncrease} to ${perseverativeErrors}.`);
   } else if (perseverativeIncrease >= 1) {
     rating = worseRating(rating, "watch");
-    reasons.push(`Perseverative errors increased to ${metrics.perseverativeErrors}.`);
+    reasons.push(`Perseverative errors increased by ${perseverativeIncrease} to ${perseverativeErrors}.`);
   }
 
   const game2AccuracyDrop = Number(baseline.baseline_game2_accuracy) - Number(payload.game2Accuracy);

@@ -871,11 +871,20 @@ button {
     inset 0 0 0 10px rgba(255, 0, 0, 0.18);
 }
 
+.token-box.color-token,
+.rule-tile.color-token {
+  background: var(--tile-color);
+}
+
 .shape {
   display: block;
   width: 60%;
   height: 60%;
   background: var(--blue);
+}
+
+.shape.token-shape {
+  background: var(--outline);
 }
 
 .color-swatch {
@@ -1369,32 +1378,32 @@ td {
 
 .pixel-cat.snack-triangle .snack-piece.snack-triangle {
   display: block;
-  fill: var(--blue);
+  fill: var(--snack-color, #fffdf4);
 }
 
 .pixel-cat.snack-square .snack-piece.snack-square {
   display: block;
-  fill: var(--yellow);
+  fill: var(--snack-color, #fffdf4);
 }
 
 .pixel-cat.snack-circle .snack-piece.snack-circle {
   display: block;
-  fill: var(--green);
+  fill: var(--snack-color, #fffdf4);
 }
 
 .pixel-cat.snack-hexagon .snack-piece.snack-hexagon {
   display: block;
-  fill: var(--red);
+  fill: var(--snack-color, #fffdf4);
 }
 
 .pixel-cat.snack-star .snack-piece.snack-star {
   display: block;
-  fill: var(--purple);
+  fill: var(--snack-color, #fffdf4);
 }
 
 .pixel-cat.snack-heart .snack-piece.snack-heart {
   display: block;
-  fill: var(--pink);
+  fill: var(--snack-color, #fffdf4);
 }
 
 .pixel-cat.eating .snack-token {

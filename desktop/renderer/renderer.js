@@ -643,13 +643,13 @@ function handleTutorialScan(hole, uid) {
     state.tutorialFedLeft = true;
     state.tutorialLastFeedLeft = timestamp;
     document.querySelector("#tutorial-left-status").textContent = t("fed");
-    animateCat("tutorial-left-cat", tag.shape);
+    animateCat("tutorial-left-cat", tag);
     flashTutorialLight("tutorial-left-card");
   } else {
     state.tutorialFedRight = true;
     state.tutorialLastFeedRight = timestamp;
     document.querySelector("#tutorial-right-status").textContent = t("fed");
-    animateCat("tutorial-right-cat", tag.shape);
+    animateCat("tutorial-right-cat", tag);
     flashTutorialLight("tutorial-right-card");
   }
 
@@ -708,7 +708,7 @@ function receiveScan(hole, uid) {
     round.lastAcceptedUid = uid;
     round.actual.push({ hole, value: actual, tag, correct });
     renderMemory();
-    animateCat("memory-cat", tag?.shape || "SQUARE");
+    animateCat("memory-cat", tag);
     roundComplete = round.actual.length >= round.expected.length;
   } else {
     const holeState = round.holes[hole];
@@ -743,7 +743,7 @@ function receiveScan(hole, uid) {
       isPerseverativeError
     });
     renderSorting();
-    animateCat(hole === "LEFT" ? "left-cat" : "right-cat", tag?.shape || "SQUARE");
+    animateCat(hole === "LEFT" ? "left-cat" : "right-cat", tag);
     roundComplete = Object.values(round.holes).every((item) => item.count >= item.target);
   }
 
@@ -1246,24 +1246,36 @@ function renderTokenBox(value, attribute, scanned = false) {
     return `<div class="token-box blank"></div>`;
   }
 
+  const classes = ["token-box", tokenFillClass(attribute), scanned ? "scanned" : ""]
+    .filter(Boolean)
+    .join(" ");
+
   return `
-    <div class="token-box ${scanned ? "scanned" : ""}">
+    <div class="${classes}"${tokenFillStyle(value, attribute)}>
       ${tokenContent(value, attribute)}
     </div>
   `;
 }
 
 function renderResultBox(value, attribute, correct) {
+  const classes = ["token-box", "result-box", tokenFillClass(attribute), correct ? "correct" : "wrong"]
+    .filter(Boolean)
+    .join(" ");
+
   return `
-    <div class="token-box result-box ${correct ? "correct" : "wrong"}">
+    <div class="${classes}"${tokenFillStyle(value, attribute)}>
       ${tokenContent(value, attribute)}
     </div>
   `;
 }
 
 function renderRuleTile(value, attribute) {
+  const classes = ["rule-tile", tokenFillClass(attribute)]
+    .filter(Boolean)
+    .join(" ");
+
   return `
-    <div class="rule-tile">
+    <div class="${classes}"${tokenFillStyle(value, attribute)}>
       ${tokenContent(value, attribute)}
     </div>
   `;
@@ -1536,10 +1548,18 @@ function average(values) {
 
 function tokenContent(value, attribute) {
   if (attribute === "color") {
-    return `<span class="color-swatch" style="--tile-color:${colorValue(value)}"></span>`;
+    return "";
   }
 
-  return shapeMarkup(value);
+  return shapeMarkup(value, "token-shape");
+}
+
+function tokenFillClass(attribute) {
+  return attribute === "color" ? "color-token" : "";
+}
+
+function tokenFillStyle(value, attribute) {
+  return attribute === "color" ? ` style="--tile-color:${colorValue(value)}"` : "";
 }
 
 function renderTiming() {
@@ -1611,16 +1631,18 @@ function colorValue(color) {
     BLUE: "#005fff",
     TURQUOISE: "#00c8c8",
     RED: "#ff2d20",
-    GREEN: "#00dc45"
+    GREEN: "#00dc45",
+    BLACK: "#111827",
+    WHITE: "#fffdf4"
   }[color] || "#ffffff";
 }
 
-function shapeMarkup(shape) {
+function shapeMarkup(shape, extraClass = "") {
   if (!shape) {
     return "";
   }
 
-  return `<span class="shape ${shape.toLowerCase()}"></span>`;
+  return `<span class="shape ${shape.toLowerCase()} ${extraClass}"></span>`;
 }
 
 function shapeTree(shape, extraClass = "") {
@@ -1675,14 +1697,20 @@ function cat(extraClass = "", id = "") {
   `;
 }
 
-function animateCat(id, shape = "SQUARE") {
+function animateCat(id, token = null) {
   const catElement = document.querySelector(`#${id}`);
 
   if (!catElement) {
     return;
   }
 
+  const shape = typeof token === "string" ? token : token?.shape || "SQUARE";
+  const color = typeof token === "object" && token ? token.color : "WHITE";
+  const snackShapeClasses = SHAPES.map((item) => `snack-${item.toLowerCase()}`);
+
+  catElement.style.setProperty("--snack-color", colorValue(color));
   catElement.classList.remove("snack-triangle", "snack-square", "snack-circle", "snack-hexagon", "snack-star", "snack-heart");
+  catElement.classList.remove(...snackShapeClasses);
   catElement.classList.remove("eating");
   void catElement.getBoundingClientRect();
   catElement.classList.add(`snack-${shape.toLowerCase()}`);
