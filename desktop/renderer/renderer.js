@@ -263,6 +263,11 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     simulateScan(randomTokenUid());
   }
+
+  if (event.key === "c" || event.key === "C") {
+    event.preventDefault();
+    simulateScan(findCorrectTokenUid());
+  }
 });
 
 window.orderStackApi.onLine((line) => {

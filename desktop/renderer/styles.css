@@ -54,7 +54,7 @@ button {
   position: relative;
   width: min(1280px, calc(100vw - 28px));
   aspect-ratio: 16 / 9;
-  min-height: 690px;
+  min-height: 750px;
   max-height: calc(100vh - 28px);
   overflow: hidden;
   border: 6px solid #2b5d8f;
@@ -425,7 +425,7 @@ button {
 .shape-forest {
   position: absolute;
   z-index: 4;
-  inset: auto 0 62px;
+  inset: auto 0 -10px;
   height: 220px;
   pointer-events: none;
 }
