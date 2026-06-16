@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("orderStackApi", {
   write: (text) => ipcRenderer.invoke("serial:write", text),
   databasePath: () => ipcRenderer.invoke("db:path"),
   listParticipants: () => ipcRenderer.invoke("db:list-participants"),
+  getLeaderboard: (limit) => ipcRenderer.invoke("db:get-leaderboard", limit),
   saveParticipant: (participant) => ipcRenderer.invoke("db:save-participant", participant),
   getOrCreateParticipant: (name) => ipcRenderer.invoke("db:get-or-create-participant", name),
   saveGameSession: (payload) => ipcRenderer.invoke("db:save-game-session", payload),

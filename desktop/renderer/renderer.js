@@ -176,7 +176,15 @@ const TEXT = {
     databaseSaving: "Saving session...",
     databaseError: "Database save failed",
     monitoringStatus: "Monitoring status",
-    flagReason: "Flag reason"
+    flagReason: "Flag reason",
+    viewLeaderboard: "View Leaderboard",
+    leaderboard: "Leaderboard",
+    leaderboardRank: "Rank",
+    leaderboardPlayer: "Player",
+    leaderboardScore: "Best Score",
+    leaderboardYou: "You",
+    leaderboardEmpty: "No scores yet.",
+    leaderboardLoading: "Loading leaderboard..."
   },
   zh: {
     gameTitle: "小猫<br />吃吃",
@@ -224,7 +232,15 @@ const TEXT = {
     databaseSaving: "正在保存记录...",
     databaseError: "数据库保存失败",
     monitoringStatus: "监测状态",
-    flagReason: "标记原因"
+    flagReason: "标记原因",
+    viewLeaderboard: "查看排行榜",
+    leaderboard: "排行榜",
+    leaderboardRank: "排名",
+    leaderboardPlayer: "玩家",
+    leaderboardScore: "最高分",
+    leaderboardYou: "你",
+    leaderboardEmpty: "暂无记录。",
+    leaderboardLoading: "正在加载排行榜..."
   }
 };
 
@@ -2245,10 +2261,16 @@ function renderTwoPlayerFinalScreen() {
         ${renderPlayerCard(state.p2, p2Stats, t("rightPlayer"), "blue-cat", overallWinner === "p2")}
       </div>
       <div id="database-status" class="database-status">${t("databaseSaving")}</div>
-      <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
+      <div class="final-actions">
+        <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
+        <button id="leaderboard-button" class="secondary-button leaderboard-button" type="button">${t("viewLeaderboard")}</button>
+      </div>
     </section>
   `;
   document.querySelector("#home-button").addEventListener("click", goHome);
+  document.querySelector("#leaderboard-button").addEventListener("click", () => {
+    renderLeaderboard([state.p1.participantId, state.p2.participantId]);
+  });
   saveTwoPlayerSession(p1Payload, p2Payload);
 }
 
@@ -2286,7 +2308,10 @@ function renderFinalScreen() {
           <div><span>${t("activeTime")}</span><strong>${formatDuration(totalSeconds)}</strong></div>
         </div>
         <div id="database-status" class="database-status">${t("databaseSaving")}</div>
-        <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
+        <div class="final-actions">
+          <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
+          <button id="leaderboard-button" class="secondary-button leaderboard-button" type="button">${t("viewLeaderboard")}</button>
+        </div>
         <details class="results-details">
           <summary>Staff results</summary>
           <div class="staff-metrics">
@@ -2308,7 +2333,77 @@ function renderFinalScreen() {
     </section>
   `;
   document.querySelector("#home-button").addEventListener("click", goHome);
+  document.querySelector("#leaderboard-button").addEventListener("click", () => {
+    renderLeaderboard([sessionPayload.participant.participantId]);
+  });
   saveCompletedSession(sessionPayload);
+}
+
+function renderLeaderboard(highlightIds = []) {
+  state.phase = "LEADERBOARD";
+  clearTimers();
+  setScene("play");
+  setHudProgress(100);
+  updateLanguageToggle();
+
+  elements.gameScreen.innerHTML = `
+    <section class="final-screen leaderboard-screen">
+      <div class="final-card panel">
+        <h2>${t("leaderboard")}</h2>
+        <div id="leaderboard-list" class="leaderboard-list">${t("leaderboardLoading")}</div>
+        <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
+      </div>
+    </section>
+  `;
+  document.querySelector("#home-button").addEventListener("click", goHome);
+
+  window.orderStackApi.getLeaderboard(10)
+    .then((rows) => renderLeaderboardRows(rows, highlightIds))
+    .catch((error) => {
+      const list = document.querySelector("#leaderboard-list");
+      if (list) {
+        list.textContent = t("leaderboardEmpty");
+      }
+      addLog(`LEADERBOARD ERROR: ${error.message}`);
+    });
+}
+
+function renderLeaderboardRows(rows, highlightIds) {
+  const list = document.querySelector("#leaderboard-list");
+
+  if (!list) {
+    return;
+  }
+
+  if (!rows.length) {
+    list.textContent = t("leaderboardEmpty");
+    return;
+  }
+
+  const tableRows = rows.map((row, index) => {
+    const isYou = highlightIds.includes(row.participantId);
+
+    return `
+      <tr class="leaderboard-row${isYou ? " is-you" : ""}">
+        <td>${index + 1}</td>
+        <td>${escapeHtml(row.participantName)}${isYou ? ` <span class="leaderboard-you-tag">(${t("leaderboardYou")})</span>` : ""}</td>
+        <td>${row.bestScore}</td>
+      </tr>
+    `;
+  }).join("");
+
+  list.innerHTML = `
+    <table class="leaderboard-table">
+      <thead>
+        <tr>
+          <th>${t("leaderboardRank")}</th>
+          <th>${t("leaderboardPlayer")}</th>
+          <th>${t("leaderboardScore")}</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  `;
 }
 
 

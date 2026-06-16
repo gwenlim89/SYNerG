@@ -99,6 +99,11 @@ ipcMain.handle("db:list-participants", async () => {
   return database.listParticipants();
 });
 
+ipcMain.handle("db:get-leaderboard", async (_event, limit) => {
+  await databaseReady;
+  return database.getLeaderboard(limit);
+});
+
 ipcMain.handle("db:save-participant", async (_event, participant) => {
   await databaseReady;
   return database.saveParticipant(participant);

@@ -187,6 +187,22 @@ async function listParticipants() {
   `);
 }
 
+async function getLeaderboard(limit) {
+  const rowLimit = finiteInteger(limit) || 10;
+
+  return querySql(`
+    SELECT s.participant_id AS participantId,
+           p.participant_name AS participantName,
+           MAX(s.total_score) AS bestScore
+    FROM sessions s
+    JOIN participants p ON p.participant_id = s.participant_id
+    WHERE s.completed = 1
+    GROUP BY s.participant_id
+    ORDER BY bestScore DESC
+    LIMIT ${sqlInteger(rowLimit)};
+  `);
+}
+
 async function saveGameSession(payload) {
   const participant = await saveParticipant(payload.participant || {});
   const sessionId = makeId("session");
@@ -656,6 +672,7 @@ function execSql(args) {
 module.exports = {
   initDatabase,
   listParticipants,
+  getLeaderboard,
   saveGameSession,
   saveParticipant,
   getOrCreateParticipant,
