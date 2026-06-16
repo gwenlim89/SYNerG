@@ -61,6 +61,31 @@
           <label><input id="debug-toggle" type="checkbox" checked /> Show round timing</label>
         </div>
 
+        <div class="debug-row">
+          <label><input id="simulate-toggle" type="checkbox" /> Simulate mode (no hardware required)</label>
+        </div>
+
+        <div id="simulate-panel" class="reg-section" hidden>
+          <p class="connection-label">Simulate scan</p>
+          <div class="reg-assign-row">
+            <select id="sim-player-select" aria-label="Simulated player">
+              <option value="1">Player 1</option>
+              <option value="2">Player 2</option>
+            </select>
+            <select id="sim-hole-select" aria-label="Simulated hole">
+              <option value="LEFT">Left hole</option>
+              <option value="RIGHT">Right hole</option>
+            </select>
+            <select id="sim-token-select" aria-label="Simulated token"></select>
+          </div>
+          <div class="reg-scan-row">
+            <button id="sim-scan-button" class="secondary-button" type="button">Scan token</button>
+            <button id="sim-correct-button" class="secondary-button" type="button">Scan correct token</button>
+            <button id="sim-remove-button" class="secondary-button" type="button">Remove token</button>
+          </div>
+          <p class="connection-label">Hotkey: press <strong>P</strong> to drop a random token into the selected hole.</p>
+        </div>
+
         <div class="log-heading">
           <h3>Serial Monitor</h3>
           <button id="clear-log-button" class="secondary-button" type="button">Clear</button>

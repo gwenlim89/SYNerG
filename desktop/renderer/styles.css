@@ -1738,23 +1738,11 @@ select {
   100% { opacity: 1; transform: scale(1); }
 }
 
-<<<<<<< HEAD
-@keyframes tutorial-card-flash {
-  0%, 100% { box-shadow: 8px 8px 0 rgba(17, 24, 39, 0.22); }
-  35%, 72% {
-    box-shadow:
-      0 0 0 9px rgba(0, 140, 255, 0.22),
-      8px 8px 0 rgba(17, 24, 39, 0.22);
-  }
-}
-
 @keyframes sparkle-pop {
   0%, 100% { opacity: 0.45; transform: scale(0.82) rotate(0deg); }
   42% { opacity: 1; transform: scale(1.18) rotate(12deg); }
 }
 
-=======
->>>>>>> 5dd03da191f1b8d116596a4ede88d7b638929b26
 @keyframes cat-jump {
   0%, 100% { transform: translateY(0); }
   40% { transform: translateY(-34px); }

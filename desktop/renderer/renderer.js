@@ -76,12 +76,21 @@ const elements = {
   regCopyButton: document.querySelector("#reg-copy-button"),
   portSelectP2: document.querySelector("#port-select-p2"),
   connectButtonP2: document.querySelector("#connect-button-p2"),
-  connectionStatusP2: document.querySelector("#connection-status-p2")
+  connectionStatusP2: document.querySelector("#connection-status-p2"),
+  simulateToggle: document.querySelector("#simulate-toggle"),
+  simulatePanel: document.querySelector("#simulate-panel"),
+  simPlayerSelect: document.querySelector("#sim-player-select"),
+  simHoleSelect: document.querySelector("#sim-hole-select"),
+  simTokenSelect: document.querySelector("#sim-token-select"),
+  simScanButton: document.querySelector("#sim-scan-button"),
+  simCorrectButton: document.querySelector("#sim-correct-button"),
+  simRemoveButton: document.querySelector("#sim-remove-button")
 };
 
 const state = {
   connected: false,
   connectedP2: false,
+  simulate: false,
   language: "en",
   playerMode: "single",
   phase: "HOME",
@@ -235,6 +244,26 @@ elements.clearLogButton.addEventListener("click", () => {
 elements.regScanButton.addEventListener("click", toggleRegScan);
 elements.regAssignButton.addEventListener("click", registerToken);
 elements.regCopyButton.addEventListener("click", copyTagsCode);
+elements.simulateToggle.addEventListener("change", toggleSimulateMode);
+elements.simScanButton.addEventListener("click", () => simulateScan(elements.simTokenSelect.value));
+elements.simCorrectButton.addEventListener("click", () => simulateScan(findCorrectTokenUid()));
+elements.simRemoveButton.addEventListener("click", simulateRemove);
+
+window.addEventListener("keydown", (event) => {
+  if (!state.simulate || event.repeat) {
+    return;
+  }
+
+  const target = event.target;
+  if (target && (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA")) {
+    return;
+  }
+
+  if (event.key === "p" || event.key === "P") {
+    event.preventDefault();
+    simulateScan(randomTokenUid());
+  }
+});
 
 window.orderStackApi.onLine((line) => {
   addLog(line);
@@ -262,7 +291,115 @@ window.orderStackApi.onClosedP2(() => {
 });
 
 refreshPorts();
+populateSimTokenSelect();
 renderHome();
+
+function populateSimTokenSelect() {
+  elements.simTokenSelect.innerHTML = "";
+
+  for (const [uid, tag] of Object.entries(TAGS)) {
+    const option = document.createElement("option");
+    option.value = uid;
+    option.textContent = tag.name;
+    elements.simTokenSelect.appendChild(option);
+  }
+}
+
+function toggleSimulateMode() {
+  state.simulate = elements.simulateToggle.checked;
+  elements.simulatePanel.hidden = !state.simulate;
+
+  if (state.simulate) {
+    addLog("SIMULATE: enabled. Connect P1/P2 without hardware.");
+  } else {
+    setConnected(false);
+    setConnectedP2(false);
+    addLog("SIMULATE: disabled. Connect real hardware to continue.");
+  }
+}
+
+function simulatedPlayerIndex() {
+  return elements.simPlayerSelect.value === "2" ? 2 : 1;
+}
+
+function randomTokenUid() {
+  const uids = Object.keys(TAGS);
+  return uids[Math.floor(Math.random() * uids.length)];
+}
+
+function simulateScan(uid) {
+  if (!uid) {
+    addLog("SIMULATE: no token to scan.");
+    return;
+  }
+
+  const line = `SCAN|HOLE:${elements.simHoleSelect.value}|UID:${uid}`;
+
+  if (simulatedPlayerIndex() === 2) {
+    addLog(`P2: ${line}`);
+    handleSerialLineP2(line);
+  } else {
+    addLog(line);
+    handleSerialLine(line);
+  }
+}
+
+function simulateRemove() {
+  const line = `REMOVED|HOLE:${elements.simHoleSelect.value}`;
+
+  if (simulatedPlayerIndex() === 2) {
+    addLog(`P2: ${line}`);
+    handleSerialLineP2(line);
+  } else {
+    addLog(line);
+    handleSerialLine(line);
+  }
+}
+
+function findCorrectTokenUid() {
+  const hole = elements.simHoleSelect.value;
+  const playerIndex = simulatedPlayerIndex();
+  const playerState = state.playerMode === "two" ? (playerIndex === 2 ? state.p2 : state.p1) : null;
+  const round = playerState ? playerState.currentRound : state.currentRound;
+
+  if (!round) {
+    addLog("SIMULATE: no active round.");
+    return null;
+  }
+
+  let expectedValue;
+
+  if (round.mode === "MEMORY") {
+    if (hole !== round.hole) {
+      addLog(`SIMULATE: this memory round only listens on ${round.hole}.`);
+      return null;
+    }
+
+    expectedValue = round.expected[round.actual.length];
+
+    if (expectedValue === undefined) {
+      addLog("SIMULATE: memory sequence already complete.");
+      return null;
+    }
+  } else {
+    const holeState = round.holes[hole];
+
+    if (!holeState || holeState.count >= holeState.target) {
+      addLog(`SIMULATE: ${hole} hole already complete for this round.`);
+      return null;
+    }
+
+    expectedValue = holeState.expected;
+  }
+
+  const uid = Object.keys(TAGS).find((key) => TAGS[key][round.attribute] === expectedValue);
+
+  if (!uid) {
+    addLog(`SIMULATE: no token found for ${expectedValue}.`);
+  }
+
+  return uid || null;
+}
 
 function t(key) {
   return TEXT[state.language][key] || TEXT.en[key] || key;
@@ -302,6 +439,15 @@ async function refreshPorts() {
 }
 
 async function connectMcu() {
+  if (state.simulate) {
+    setConnected(true);
+    addLog("SIMULATE: P1 connected (no hardware).");
+    await setScanMode("OFF");
+    await sendLedCommand("LED:OFF");
+    renderHome();
+    return;
+  }
+
   if (!elements.portSelect.value) {
     addLog("Choose a serial port first.");
     return;
@@ -321,11 +467,19 @@ async function connectMcu() {
 
 function setConnected(connected) {
   state.connected = connected;
-  elements.connectionStatus.textContent = connected ? "Device: Connected" : "Device: Not connected";
-  elements.connectButton.textContent = connected ? "P1: Connected" : "Connect P1";
+  const label = state.simulate ? "Simulated" : "Connected";
+  elements.connectionStatus.textContent = connected ? `Device: ${label}` : "Device: Not connected";
+  elements.connectButton.textContent = connected ? `P1: ${label}` : "Connect P1";
 }
 
 async function connectMcuP2() {
+  if (state.simulate) {
+    setConnectedP2(true);
+    addLog("SIMULATE: P2 connected (no hardware).");
+    await sendLedCommandToPlayer("LED:OFF", 2);
+    return;
+  }
+
   if (!elements.portSelectP2.value) {
     addLog("Choose a P2 serial port first.");
     return;
@@ -343,8 +497,9 @@ async function connectMcuP2() {
 
 function setConnectedP2(connected) {
   state.connectedP2 = connected;
-  elements.connectionStatusP2.textContent = connected ? "P2: Connected" : "P2: Not connected";
-  elements.connectButtonP2.textContent = connected ? "P2: Connected" : "Connect P2";
+  const label = state.simulate ? "Simulated" : "Connected";
+  elements.connectionStatusP2.textContent = connected ? `P2: ${label}` : "P2: Not connected";
+  elements.connectButtonP2.textContent = connected ? `P2: ${label}` : "Connect P2";
 }
 
 function handleSerialLine(line) {
@@ -866,7 +1021,7 @@ async function startActiveTimerAndScanning() {
 async function setScanMode(mode) {
   state.scanEnabled = mode !== "OFF";
 
-  if (!state.connected) {
+  if (!state.connected || state.simulate) {
     return;
   }
 
@@ -878,7 +1033,7 @@ async function setScanMode(mode) {
 }
 
 async function sendLedCommand(command) {
-  if (!state.connected) {
+  if (!state.connected || state.simulate) {
     return;
   }
 
@@ -891,7 +1046,7 @@ async function sendLedCommand(command) {
 
 async function sendLedCommandToPlayer(command, playerIndex) {
   if (playerIndex === 2) {
-    if (!state.connectedP2) {
+    if (!state.connectedP2 || state.simulate) {
       return;
     }
 
@@ -911,7 +1066,7 @@ async function setScanModeForPlayer(mode, playerIndex) {
       state.p2.scanEnabled = mode !== "OFF";
     }
 
-    if (!state.connectedP2) {
+    if (!state.connectedP2 || state.simulate) {
       return;
     }
 
@@ -1400,6 +1555,11 @@ async function toggleRegScan() {
 
   state.regScanEnabled = !state.regScanEnabled;
   elements.regScanButton.textContent = state.regScanEnabled ? "Stop Scanning" : "Start Scanning";
+
+  if (state.simulate) {
+    addLog("SIMULATE: token registration requires real hardware.");
+    return;
+  }
 
   if (!state.scanEnabled) {
     try {
