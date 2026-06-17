@@ -1,6 +1,6 @@
 const INSTRUCTION_MS = 0;
 const COUNTDOWN_STEP_MS = 1000;
-const MEMORIZE_MS = 5000;
+const MEMORIZE_MS = 8000;
 const RESULT_LED_DELAY_MS = 430;
 const SAME_TAG_COOLDOWN_MS = 1200;
 const MEMORY_LENGTHS = [3, 3, 4, 5, 5, 6];
@@ -1830,9 +1830,12 @@ function renderMemory(secondsRemaining = null) {
   const heading = showingSequence ? t("rememberSequence") : t("feedCat");
   const hint = showingSequence ? t("rememberHint") : t("inputHint");
   const scannedValues = round.actual.map((item) => item.value);
+  const activeIndex = showingSequence && secondsRemaining !== null
+    ? (MEMORIZE_MS / 1000 - secondsRemaining) % round.expected.length
+    : -1;
   const boxes = round.expected.map((expected, index) => {
     const value = showingSequence ? expected : scannedValues[index];
-    return renderTokenBox(value, round.attribute, Boolean(!showingSequence && value));
+    return renderTokenBox(value, round.attribute, Boolean(!showingSequence && value), index === activeIndex);
   }).join("");
   const focus = showingSequence
     ? `
@@ -1866,7 +1869,8 @@ function renderTwoPlayerMemorize(secondsRemaining) {
 
   const renderSeq = (playerState, label) => {
     const round = playerState.currentRound;
-    const boxes = round.expected.map((expected) => renderTokenBox(expected, round.attribute, true)).join("");
+    const activeIndex = (MEMORIZE_MS / 1000 - secondsRemaining) % round.expected.length;
+    const boxes = round.expected.map((expected, index) => renderTokenBox(expected, round.attribute, true, index === activeIndex)).join("");
 
     return `
       <article class="memory-player-card panel">
@@ -2479,12 +2483,12 @@ function sparkles() {
   `;
 }
 
-function renderTokenBox(value, attribute, scanned = false) {
+function renderTokenBox(value, attribute, scanned = false, active = false) {
   if (!value) {
     return `<div class="token-box blank"></div>`;
   }
 
-  const classes = ["token-box", tokenFillClass(attribute), scanned ? "scanned" : ""]
+  const classes = ["token-box", tokenFillClass(attribute), scanned ? "scanned" : "", active ? "memorize-active" : ""]
     .filter(Boolean)
     .join(" ");
 

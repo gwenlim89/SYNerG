@@ -969,6 +969,21 @@ button {
   animation: pixel-box-pop 360ms steps(3, end);
 }
 
+.token-box.memorize-active {
+  border-color: #f5c400;
+  box-shadow:
+    6px 6px 0 rgba(17, 24, 39, 0.18),
+    0 0 0 4px #f5c400,
+    inset 0 0 0 10px rgba(255, 210, 0, 0.28);
+  animation: memorize-pulse 600ms steps(2, end);
+}
+
+@keyframes memorize-pulse {
+  0%   { box-shadow: 6px 6px 0 rgba(17, 24, 39, 0.18), 0 0 0 4px #f5c400, inset 0 0 0 10px rgba(255, 210, 0, 0.28); }
+  50%  { box-shadow: 6px 6px 0 rgba(17, 24, 39, 0.18), 0 0 0 8px #f5c400, inset 0 0 0 10px rgba(255, 210, 0, 0.55); }
+  100% { box-shadow: 6px 6px 0 rgba(17, 24, 39, 0.18), 0 0 0 4px #f5c400, inset 0 0 0 10px rgba(255, 210, 0, 0.28); }
+}
+
 .token-box.correct {
   background: #d9ffd7;
   border-color: #1b9c3a;
