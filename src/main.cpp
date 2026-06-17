@@ -4,7 +4,7 @@
 #include <FastLED.h>
 
 // Set to 1 for MCU1 (Player 1) or 2 for MCU2 (Player 2) before flashing.
-#define PLAYER_NUM 1
+#define PLAYER_NUM 2
 
 // Shared SPI bus for the two PN532 readers.
 #define PN532_SCK_PIN    4

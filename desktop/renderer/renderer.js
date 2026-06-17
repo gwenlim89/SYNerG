@@ -9,6 +9,25 @@ const TOTAL_ROUNDS = MEMORY_LENGTHS.length + SORTING_ROUNDS;
 
 const COLORS = ["RED", "BLUE", "YELLOW"];
 const SHAPES = ["CIRCLE", "SQUARE", "STAR", "HEXAGON", "HEART", "TRIANGLE"];
+const MEOW_SOURCES = [
+  "assets/sounds/meow-1.m4a",
+  "assets/sounds/meow-2.m4a",
+  "assets/sounds/meow-3.m4a",
+  "assets/sounds/meow-4.m4a"
+];
+const MEOW_SOUNDS = MEOW_SOURCES.map((source) => {
+  const audio = new Audio(source);
+  audio.preload = "auto";
+  audio.volume = 0.72;
+  return audio;
+});
+const CLICK_SOUND = new Audio("assets/sounds/click.m4a");
+CLICK_SOUND.preload = "auto";
+CLICK_SOUND.volume = 0.55;
+const BACKGROUND_MUSIC = new Audio("assets/music/background.m4a");
+BACKGROUND_MUSIC.loop = true;
+BACKGROUND_MUSIC.preload = "auto";
+BACKGROUND_MUSIC.volume = 0.5;
 const TAGS = {
   "53:9D:80:74:95:00:01": { name: "Blue circle 1",    color: "BLUE",   shape: "CIRCLE"   },
   "53:9D:9A:74:95:00:01": { name: "Blue circle 2",    color: "BLUE",   shape: "CIRCLE"   },
@@ -265,6 +284,8 @@ elements.simScanButton.addEventListener("click", () => simulateScan(elements.sim
 elements.simCorrectButton.addEventListener("click", () => simulateScan(findCorrectTokenUid()));
 elements.simRemoveButton.addEventListener("click", simulateRemove);
 
+document.addEventListener("pointerdown", handleUiPointerDown, true);
+
 window.addEventListener("keydown", (event) => {
   if (!state.simulate || event.repeat) {
     return;
@@ -314,6 +335,7 @@ window.orderStackApi.onClosedP2(() => {
 refreshPorts();
 populateSimTokenSelect();
 renderHome();
+playBackgroundMusic();
 
 function populateSimTokenSelect() {
   elements.simTokenSelect.innerHTML = "";
@@ -916,6 +938,7 @@ function beginCountdown() {
 
     if (count === 0) {
       clearCountdown();
+      playBackgroundMusic();
       setScene("play");
       startPlayableRound();
       return;
@@ -926,6 +949,8 @@ function beginCountdown() {
 }
 
 async function startPlayableRound() {
+  playBackgroundMusic();
+
   if (state.playerMode === "two") {
     await _startTwoPlayerPlayableRound();
     return;
@@ -1664,41 +1689,40 @@ function renderHome() {
         ${shapeTree("HEXAGON", "tree-four")}
         ${shapeTree("HEART", "tree-five")}
       </div>
+      <button id="home-leaderboard-button" class="home-leaderboard-button" type="button">${t("viewLeaderboard")}</button>
       <div class="home-hero">
         <h1 class="title">${t("gameTitle")}</h1>
         <div class="player-mode-toggle" aria-label="${t("playerMode")}">
           <button id="single-player-button" class="${state.playerMode === "single" ? "selected" : ""}" type="button">${t("onePlayer")}</button>
           <button id="two-player-button" class="${state.playerMode === "two" ? "selected" : ""}" type="button">${t("twoPlayers")}</button>
         </div>
-        ${state.playerMode === "two" ? `
-          <form id="participant-form" class="participant-form panel two-player-form">
-            <p>${t("participantHint")}</p>
-            <label>
-              <span>${t("leftPlayer")}</span>
-              <input id="participant-name-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.name)}" />
-            </label>
-            <label>
-              <span>${t("rightPlayer")}</span>
-              <input id="participant-name-input-p2" type="text" autocomplete="off" value="${escapeHtml(state.participant2.name)}" />
-            </label>
-          </form>
-        ` : `
-          <form id="participant-form" class="participant-form panel">
-            <p>${t("participantHint")}</p>
-            <label>
-              <span>${t("participantName")}</span>
-              <input id="participant-name-input" type="text" autocomplete="off" value="${escapeHtml(state.participant.name)}" />
-            </label>
-          </form>
-        `}
-        <div class="hero-cat-wrap${state.playerMode === "two" ? " two-cats" : ""}">
+        <div class="hero-cat-wrap${state.playerMode === "two" ? " two-cats" : " single-cat-entry"}">
           ${state.playerMode === "two" ? `
-            ${cat("hero-cat hero-cat-left", "hero-cat-left")}
-            ${cat("hero-cat hero-cat-right pink-cat", "hero-cat-right")}
+            <form id="participant-form" class="two-cat-entry-form">
+              <div class="two-cat-entry-slot">
+                ${cat("hero-cat hero-cat-left pink-cat", "hero-cat-left")}
+                <label>
+                  <input id="participant-name-input" type="text" autocomplete="off" placeholder="${t("leftPlayer")}" value="${escapeHtml(state.participant.name)}" />
+                </label>
+              </div>
+              <button id="start-cat-button" class="cat-start-button two-cat-start-button" type="button">${t("start")}</button>
+              <div class="two-cat-entry-slot">
+                ${cat("hero-cat hero-cat-right blue-cat", "hero-cat-right")}
+                <label>
+                  <input id="participant-name-input-p2" type="text" autocomplete="off" placeholder="${t("rightPlayer")}" value="${escapeHtml(state.participant2.name)}" />
+                </label>
+              </div>
+            </form>
           ` : `
             ${cat("hero-cat", "hero-cat")}
+            <form id="participant-form" class="cat-name-form">
+              <label>
+                <span>${t("participantName")}</span>
+                <input id="participant-name-input" type="text" autocomplete="off" placeholder="${t("participantName")}" value="${escapeHtml(state.participant.name)}" />
+              </label>
+              <button id="start-cat-button" class="cat-start-button" type="button">${t("start")}</button>
+            </form>
           `}
-          <button id="start-cat-button" class="cat-start-button" type="button">${t("start")}</button>
         </div>
         ${state.playerMode === "two" ? `<p class="press-start">${t("pressStart")}</p>` : ""}
       </div>
@@ -1719,6 +1743,10 @@ function renderHome() {
     renderHome();
   });
   document.querySelector("#start-cat-button").addEventListener("click", startSession);
+  document.querySelector("#home-leaderboard-button").addEventListener("click", () => {
+    cacheParticipantForm();
+    renderLeaderboard();
+  });
 }
 
 function renderGameInstruction(mode) {
@@ -2343,21 +2371,28 @@ function renderLeaderboard(highlightIds = []) {
   state.phase = "LEADERBOARD";
   clearTimers();
   setScene("play");
-  setHudProgress(100);
+  setHudProgress(0);
   updateLanguageToggle();
 
   elements.gameScreen.innerHTML = `
-    <section class="final-screen leaderboard-screen">
-      <div class="final-card panel">
-        <h2>${t("leaderboard")}</h2>
-        <div id="leaderboard-list" class="leaderboard-list">${t("leaderboardLoading")}</div>
-        <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
+    <section class="leaderboard-screen">
+      <div class="leaderboard-stage">
+        <div class="leaderboard-copy">
+          <p class="leaderboard-kicker">Top 7</p>
+          <h2>${t("leaderboard")}</h2>
+          <div id="leaderboard-list" class="leaderboard-list">${t("leaderboardLoading")}</div>
+          <button id="home-button" class="ok-button home-button" type="button">${t("home")}</button>
+        </div>
+        <div class="leaderboard-cat-side">
+          ${cat("leaderboard-cat happy-cat pink-cat")}
+          ${sparkles()}
+        </div>
       </div>
     </section>
   `;
   document.querySelector("#home-button").addEventListener("click", goHome);
 
-  window.orderStackApi.getLeaderboard(10)
+  window.orderStackApi.getLeaderboard(7)
     .then((rows) => renderLeaderboardRows(rows, highlightIds))
     .catch((error) => {
       const list = document.querySelector("#leaderboard-list");
@@ -2384,9 +2419,8 @@ function renderLeaderboardRows(rows, highlightIds) {
     const isYou = highlightIds.includes(row.participantId);
 
     return `
-      <tr class="leaderboard-row${isYou ? " is-you" : ""}">
-        <td>${index + 1}</td>
-        <td>${escapeHtml(row.participantName)}${isYou ? ` <span class="leaderboard-you-tag">(${t("leaderboardYou")})</span>` : ""}</td>
+      <tr class="leaderboard-row rank-${index + 1}${isYou ? " is-you" : ""}">
+        <td><span class="leaderboard-rank">${index + 1}</span>${escapeHtml(row.participantName)}${isYou ? ` <span class="leaderboard-you-tag">(${t("leaderboardYou")})</span>` : ""}</td>
         <td>${row.bestScore}</td>
       </tr>
     `;
@@ -2396,7 +2430,6 @@ function renderLeaderboardRows(rows, highlightIds) {
     <table class="leaderboard-table">
       <thead>
         <tr>
-          <th>${t("leaderboardRank")}</th>
           <th>${t("leaderboardPlayer")}</th>
           <th>${t("leaderboardScore")}</th>
         </tr>
@@ -2988,10 +3021,46 @@ function animateCat(id, token = null) {
   void catElement.getBoundingClientRect();
   catElement.classList.add(`snack-${shape.toLowerCase()}`);
   catElement.classList.add("eating");
+  playRandomMeow();
 
   window.setTimeout(() => {
     catElement.classList.remove("eating");
   }, 880);
+}
+
+function playRandomMeow() {
+  if (!MEOW_SOUNDS.length) {
+    return;
+  }
+
+  const sound = randomChoice(MEOW_SOUNDS);
+  sound.pause();
+  sound.currentTime = 0;
+  sound.play().catch(() => {});
+}
+
+function handleUiPointerDown(event) {
+  if (state.phase !== "COUNTDOWN") {
+    playBackgroundMusic();
+  }
+
+  if (shouldPlayClickSound(event.target)) {
+    playClickSound();
+  }
+}
+
+function shouldPlayClickSound(target) {
+  return Boolean(target?.closest?.("button, select, input, summary, label"));
+}
+
+function playClickSound() {
+  CLICK_SOUND.pause();
+  CLICK_SOUND.currentTime = 0;
+  CLICK_SOUND.play().catch(() => {});
+}
+
+function playBackgroundMusic() {
+  BACKGROUND_MUSIC.play().catch(() => {});
 }
 
 function formatDuration(seconds) {

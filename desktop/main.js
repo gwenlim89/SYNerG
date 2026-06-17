@@ -4,6 +4,8 @@ const { SerialPort } = require("serialport");
 const { ReadlineParser } = require("@serialport/parser-readline");
 const database = require("./database");
 
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
 let mainWindow;
 let activePort;
 let port2;
