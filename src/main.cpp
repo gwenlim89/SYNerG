@@ -12,21 +12,21 @@
 #define PN532_MOSI_PIN   6
 
 #if PLAYER_NUM == 1
-  #define LEFT_SS_PIN     2
-  #define RIGHT_SS_PIN    7
+  #define LEFT_SS_PIN     7
+  #define RIGHT_SS_PIN    2
   #define LED_DATA_PIN    10
-  #define LEFT_LED_START  4
-  #define LEFT_LED_END    8
-  #define RIGHT_LED_START 0
-  #define RIGHT_LED_END   4
-#elif PLAYER_NUM == 2
-  #define LEFT_SS_PIN     9
-  #define RIGHT_SS_PIN    3
-  #define LED_DATA_PIN    8
   #define LEFT_LED_START  0
   #define LEFT_LED_END    4
   #define RIGHT_LED_START 4
   #define RIGHT_LED_END   8
+#elif PLAYER_NUM == 2
+  #define LEFT_SS_PIN     3
+  #define RIGHT_SS_PIN    9
+  #define LED_DATA_PIN    8
+  #define LEFT_LED_START  4
+  #define LEFT_LED_END    8
+  #define RIGHT_LED_START 0
+  #define RIGHT_LED_END   4
 #else
   #error "PLAYER_NUM must be 1 or 2"
 #endif
