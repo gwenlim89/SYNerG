@@ -1,3 +1,12 @@
+/*
+  Pixel game styling
+  ------------------
+  This stylesheet defines the Kitten Nibbles look: the fixed game frame,
+  pixel-art landscape, home screen, memory/sorting layouts, result screens,
+  leaderboard, cat SVG styling, staff panel, and animations.
+*/
+
+/* Global theme tokens and reset rules shared by every screen. */
 :root {
   color-scheme: light;
   --sky: #5fc7ff;
@@ -259,6 +268,7 @@ button {
   z-index: 6;
 }
 
+/* Home screen: title, language/settings controls, player toggle, cat name entry, and leaderboard button. */
 .home-screen {
   display: grid;
   place-items: center;
@@ -716,6 +726,7 @@ button {
 .tree-four { right: 22%; bottom: 28px; transform: scale(0.74); }
 .tree-five { right: 8%; bottom: 4px; transform: scale(0.88); }
 
+/* Shared panels and button styles keep the UI readable for players and staff. */
 .panel {
   border: 6px solid var(--outline);
   border-radius: 6px;
@@ -756,6 +767,7 @@ button {
     inset -5px -5px 0 rgba(0, 0, 0, 0.2);
 }
 
+/* Instruction and countdown screens pause scanning visually before active play begins. */
 .instruction-screen {
   display: grid;
   place-items: center;
@@ -927,6 +939,7 @@ button {
   text-shadow: 3px 3px 0 #335b96;
 }
 
+/* Memory game: sequence display, countdown clock, blank input boxes, and result coloring. */
 .memory-screen {
   display: grid;
   grid-template-rows: auto auto 1fr;
@@ -1068,6 +1081,7 @@ button {
   gap: 10px;
 }
 
+/* Two-player memory/result layouts keep each player side-by-side but visually consistent. */
 .two-player-memory-screen,
 .two-player-result-screen {
   display: grid;
@@ -1317,6 +1331,7 @@ button {
   animation: cat-jump 680ms steps(5, end) infinite;
 }
 
+/* Sorting game: each hole/cat card shows the required color or shape and scanned count. */
 .sorting-screen {
   display: grid;
   grid-template-rows: auto auto 1fr;
@@ -1432,6 +1447,7 @@ button {
   width: 265px;
 }
 
+/* Final score and leaderboard screens show saved-session status and top scores. */
 .final-screen {
   display: grid;
   place-items: center;
@@ -1683,6 +1699,7 @@ button {
   margin: 0;
 }
 
+/* Staff-facing database status, result details, and scan halos. */
 .database-status {
   display: grid;
   gap: 4px;
@@ -1759,6 +1776,7 @@ td {
   animation: halo-fade 1.4s ease-out forwards;
 }
 
+/* Pixel cat SVG styling, color variants, expressions, eating animation, and snack tokens. */
 .pixel-cat {
   position: absolute;
   z-index: 7;
@@ -1951,6 +1969,7 @@ td {
   animation: pixel-eye-squint 820ms steps(4, end);
 }
 
+/* Staff settings panel: serial ports, simulation, serial log, and token registration. */
 .settings-panel {
   position: fixed;
   inset: 24px;
@@ -2070,6 +2089,7 @@ select {
   width: 100%;
 }
 
+/* Animation keyframes for token eating, countdowns, sparkles, cat jumps, and scan halos. */
 @keyframes pixel-snack-drop {
   0% { opacity: 0; transform: translate(0, -22px) scale(1); }
   14% { opacity: 1; transform: translate(-8px, 14px) scale(1); }
@@ -2134,6 +2154,7 @@ select {
   100% { opacity: 0; }
 }
 
+/* Responsive rules preserve the same game structure on narrower screens. */
 @media (max-width: 980px) {
   .sky {
     min-height: 620px;

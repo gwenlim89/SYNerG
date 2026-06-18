@@ -3,6 +3,33 @@
 #include <Adafruit_PN532.h>
 #include <FastLED.h>
 
+/*
+  Firmware role in Kitten Nibbles / Order Stack Cognitive Rounds
+  ----------------------------------------------------------------
+  This Arduino program is the hardware bridge for one ESP32-C3 board.
+  Each board owns two PN532 NFC readers and one LED strip split into
+  left/right sections. The Electron game sends simple serial commands
+  such as SCAN:LEFT or LED:SORT:LEFT:YELLOW:RIGHT:BLUE, and this
+  firmware replies with machine-readable events such as SCAN|HOLE:LEFT.
+
+  Function guide:
+  - setupLeds: starts FastLED and clears the physical LED strip.
+  - colorFromName: converts game color names from Electron into LED colors.
+  - fillSection/renderBaseLeds: paint the left/right LED ranges.
+  - setLedOff/setMemoryLed/setSortingLeds: set persistent LED modes.
+  - flashScanLed: flashes blue after a successful accepted scan.
+  - startSuccessLeds/startErrorLeds/startRainbowLeds: result/end feedback.
+  - renderResultLeds/updateLeds: non-blocking LED animation loop.
+  - deselectAllReaders: releases both PN532 chip-select lines on shared SPI.
+  - printUid/sameUid/rememberUid: UID formatting and duplicate tracking.
+  - initializeReader: checks each PN532 and configures tag-reading mode.
+  - setScanningMode: enables only the reader(s) the game currently allows.
+  - handleSerialCommands: receives UI commands from Electron.
+  - pollReader: reads one PN532 and emits SCAN/REMOVED/COOLDOWN events.
+  - setup: boots hardware, readers, LEDs, and serial reporting.
+  - loop: continuously handles commands, LED animation, and enabled readers.
+*/
+
 // Set to 1 for MCU1 (Player 1) or 2 for MCU2 (Player 2) before flashing.
 #define PLAYER_NUM 2
 
@@ -35,6 +62,8 @@
 #define RESULT_MS        1600
 #define SAME_UID_COOLDOWN_MS 1200
 
+// Physical LED state. The LED ranges are split so the UI can point players
+// to the same left/right holes that the NFC readers represent.
 CRGB leds[NUM_LEDS];
 
 enum LedMode {
@@ -59,9 +88,12 @@ unsigned long lastLedFrameAt = 0;
 #define READ_TIMEOUT_MS 200
 #define SETUP_ATTEMPTS  3
 
+// Two PN532 readers share the SPI clock/data pins but use separate SS pins.
 Adafruit_PN532 leftReader(LEFT_SS_PIN, &SPI);
 Adafruit_PN532 rightReader(RIGHT_SS_PIN, &SPI);
 
+// Reader/scanning state. The "armed" and "tagPresent" flags make the reader
+// wait for a tag to leave before accepting the next scan from that hole.
 bool leftReady = false;
 bool rightReady = false;
 bool scanningEnabled = false;
@@ -78,12 +110,14 @@ uint8_t rightLastUidLength = 0;
 unsigned long leftLastScanAt = 0;
 unsigned long rightLastScanAt = 0;
 
+// Start the LED strip using the configured data pin and a known blank state.
 void setupLeds() {
   FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(80);
   FastLED.clear(true);
 }
 
+// Translate UI color strings into strong LED colors for sorting prompts.
 CRGB colorFromName(String name) {
   name.toUpperCase();
 
@@ -97,17 +131,20 @@ CRGB colorFromName(String name) {
   return CRGB::Black;
 }
 
+// Fill one side of the LED strip. Ranges are half-open: start inclusive, end exclusive.
 void fillSection(int start, int end, const CRGB &color) {
   for (int i = start; i < end; i++) {
     leds[i] = color;
   }
 }
 
+// Repaint both hole sections with their persistent "base" colors.
 void renderBaseLeds() {
   fillSection(LEFT_LED_START, LEFT_LED_END, leftBaseColor);
   fillSection(RIGHT_LED_START, RIGHT_LED_END, rightBaseColor);
 }
 
+// Clear every LED effect and return the hardware to idle.
 void setLedOff() {
   ledMode = LED_MODE_OFF;
   leftBaseColor = CRGB::Black;
@@ -118,18 +155,21 @@ void setLedOff() {
   FastLED.clear(true);
 }
 
+// Light one hole yellow for the memory game so only that scanner should be used.
 void setMemoryLed(const char *hole) {
   ledMode = LED_MODE_MEMORY;
   leftBaseColor = strcmp(hole, "LEFT") == 0 ? CRGB(255, 185, 0) : CRGB::Black;
   rightBaseColor = strcmp(hole, "RIGHT") == 0 ? CRGB(255, 185, 0) : CRGB::Black;
 }
 
+// Light each sorting hole with the color that belongs in that hole.
 void setSortingLeds(String leftColor, String rightColor) {
   ledMode = LED_MODE_SORTING;
   leftBaseColor = colorFromName(leftColor);
   rightBaseColor = colorFromName(rightColor);
 }
 
+// Flash one side blue after the firmware accepts a tag scan.
 void flashScanLed(const char *hole) {
   unsigned long until = millis() + SCAN_FLASH_MS;
 
@@ -140,22 +180,26 @@ void flashScanLed(const char *hole) {
   }
 }
 
+// Start a short green sparkle effect for a correct round.
 void startSuccessLeds() {
   ledMode = LED_MODE_SUCCESS;
   resultColor = CRGB::Green;
   resultUntil = millis() + RESULT_MS;
 }
 
+// Start a short red sparkle effect for an incorrect round.
 void startErrorLeds() {
   ledMode = LED_MODE_ERROR;
   resultColor = CRGB::Red;
   resultUntil = millis() + RESULT_MS;
 }
 
+// Start the rainbow loop used after the whole game finishes.
 void startRainbowLeds() {
   ledMode = LED_MODE_RAINBOW;
 }
 
+// Draw the sparkle animation for success/error result feedback.
 void renderResultLeds() {
   fadeToBlackBy(leds, NUM_LEDS, 45);
 
@@ -166,6 +210,7 @@ void renderResultLeds() {
   }
 }
 
+// Advance LED animations without blocking NFC reading or serial commands.
 void updateLeds() {
   unsigned long now = millis();
 
@@ -211,12 +256,14 @@ void updateLeds() {
   FastLED.show();
 }
 
+// Make sure neither PN532 is selected before switching readers on shared SPI.
 void deselectAllReaders() {
   digitalWrite(LEFT_SS_PIN, HIGH);
   digitalWrite(RIGHT_SS_PIN, HIGH);
   delayMicroseconds(10);
 }
 
+// Print a UID in the colon-separated format the Electron app expects.
 void printUid(uint8_t *uid, uint8_t uidLength) {
   for (uint8_t i = 0; i < uidLength; i++) {
     if (uid[i] < 0x10) {
@@ -231,6 +278,7 @@ void printUid(uint8_t *uid, uint8_t uidLength) {
   }
 }
 
+// Compare two UIDs so a stuck tag can be filtered out safely.
 bool sameUid(uint8_t *a, uint8_t aLength, uint8_t *b, uint8_t bLength) {
   if (aLength != bLength) {
     return false;
@@ -245,6 +293,7 @@ bool sameUid(uint8_t *a, uint8_t aLength, uint8_t *b, uint8_t bLength) {
   return true;
 }
 
+// Store the last accepted UID for a reader to support cooldown checks.
 void rememberUid(uint8_t *destination, uint8_t &destinationLength, uint8_t *source, uint8_t sourceLength) {
   destinationLength = sourceLength;
 
@@ -253,6 +302,7 @@ void rememberUid(uint8_t *destination, uint8_t &destinationLength, uint8_t *sour
   }
 }
 
+// Bring one PN532 online, verify firmware, and configure it for passive tag reads.
 bool initializeReader(Adafruit_PN532 &reader, const char *hole) {
   uint32_t versionData = 0;
 
@@ -315,6 +365,7 @@ bool initializeReader(Adafruit_PN532 &reader, const char *hole) {
   return true;
 }
 
+// Enable only the holes the current game phase is allowed to read from.
 void setScanningMode(bool leftEnabled, bool rightEnabled) {
   scanLeftEnabled = leftEnabled;
   scanRightEnabled = rightEnabled;
@@ -340,6 +391,7 @@ void setScanningMode(bool leftEnabled, bool rightEnabled) {
   }
 }
 
+// Parse commands sent by Electron and translate them into scan/LED behavior.
 void handleSerialCommands() {
   if (!Serial.available()) {
     return;
@@ -393,6 +445,7 @@ void handleSerialCommands() {
   }
 }
 
+// Poll one reader once, emit scan events, and re-arm after a tag is removed.
 void pollReader(
   Adafruit_PN532 &reader,
   const char *hole,
@@ -466,6 +519,7 @@ void pollReader(
   Serial.println();
 }
 
+// Boot the board, initialize LEDs/readers, and report readiness to Electron.
 void setup() {
   Serial.begin(115200);
   delay(2500);
@@ -497,6 +551,7 @@ void setup() {
   setScanningMode(false, false);
 }
 
+// Main hardware loop: receive UI commands, animate LEDs, and read enabled scanners.
 void loop() {
   handleSerialCommands();
   updateLeds();

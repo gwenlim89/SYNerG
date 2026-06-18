@@ -1,3 +1,45 @@
+/*
+  Renderer/game controller
+  ------------------------
+  This browser-side file owns the whole player experience: start screen,
+  instructions, countdowns, memory rounds, sorting rounds, two-player views,
+  scan handling, scoring, animation, audio, and database payload creation.
+  It does not talk to hardware directly; it calls window.orderStackApi, which
+  is exposed by preload.js and handled in Electron's main process.
+
+  Function guide:
+  - populateSimTokenSelect/toggleSimulateMode/simulateScan/simulateRemove:
+    staff simulation tools for testing without NFC hardware.
+  - findCorrectTokenUid: chooses a valid simulated token for the current rule.
+  - t/toggleLanguage/updateLanguageToggle: English/Chinese UI text switching.
+  - refreshPorts/connectMcu/connectMcuP2/setConnected/setConnectedP2:
+    serial device selection and connection state.
+  - handleSerialLine/handleSerialLineP2/parseFields/handleRemovedLine:
+    convert firmware events into game actions.
+  - startSession/makePlayerSession/resetSessionState/goHome/beginNextRound:
+    start, reset, and advance the game.
+  - createMemoryRound/createSortingRound/createTwoPlayerRound:
+    generate round rules, sequence length, target holes, and sorting targets.
+  - beginCountdown/startPlayableRound/startMemoryInput/startActiveTimerAndScanning:
+    manage transitions from instruction/countdown into active scanning.
+  - setScanMode/sendLedCommand and player/all variants:
+    send SCAN and LED commands to the firmware.
+  - receiveScan/receiveScanForPlayer/completeRound/_completeTwoPlayerRound:
+    validate token placements, record data, animate cats, and end rounds.
+  - toggleRegScan/handleRegScan/registerToken/renderRegList/copyTagsCode:
+    staff token-registration helper.
+  - renderHome/renderGameInstruction/renderCountdown/renderMemory/renderSorting:
+    draw the main game screens.
+  - render*Complete/render*Result/renderFinalScreen/renderLeaderboard:
+    draw results, final score, and leaderboard screens.
+  - scoreRound/comparePlayers/buildSessionPayload/buildExecutiveMetrics:
+    calculate scores and monitoring data saved to SQLite.
+  - cat/animateCat/playRandomMeow/playClickSound/playBackgroundMusic:
+    SVG cat rendering and audio/animation feedback.
+  - utility helpers at the end: timing, escaping, randomization, and logging.
+*/
+
+// Game timing and difficulty configuration.
 const INSTRUCTION_MS = 0;
 const COUNTDOWN_STEP_MS = 1000;
 const MEMORIZE_MS = 8000;
@@ -7,8 +49,11 @@ const MEMORY_LENGTHS = [3, 3, 4, 5, 5, 6];
 const SORTING_ROUNDS = 6;
 const TOTAL_ROUNDS = MEMORY_LENGTHS.length + SORTING_ROUNDS;
 
+// Token categories used by the UI and scoring rules.
 const COLORS = ["RED", "BLUE", "YELLOW"];
 const SHAPES = ["CIRCLE", "SQUARE", "STAR", "HEXAGON", "HEART", "TRIANGLE"];
+
+// Audio assets are preloaded once and reused whenever cats eat or buttons are pressed.
 const MEOW_SOURCES = [
   "assets/sounds/meow-1.m4a",
   "assets/sounds/meow-2.m4a",
@@ -28,6 +73,9 @@ const BACKGROUND_MUSIC = new Audio("assets/music/background.m4a");
 BACKGROUND_MUSIC.loop = true;
 BACKGROUND_MUSIC.preload = "auto";
 BACKGROUND_MUSIC.volume = 0.5;
+
+// Registered physical NFC tags. Each UID maps to both a color and a shape so
+// the same token can be used by memory rounds and sorting rounds.
 const TAGS = {
   "53:9D:80:74:95:00:01": { name: "Blue circle 1",    color: "BLUE",   shape: "CIRCLE"   },
   "53:9D:9A:74:95:00:01": { name: "Blue circle 2",    color: "BLUE",   shape: "CIRCLE"   },
@@ -68,6 +116,7 @@ const TAGS = {
   "53:86:AB:74:95:00:01": { name: "Red hexagon 2",    color: "RED",    shape: "HEXAGON"  }
 };
 
+// DOM references used throughout the renderer.
 const elements = {
   sky: document.querySelector("#sky"),
   gameScreen: document.querySelector("#game-screen"),
@@ -106,6 +155,7 @@ const elements = {
   simRemoveButton: document.querySelector("#sim-remove-button")
 };
 
+// Single source of truth for the current game, players, scans, timers, and UI mode.
 const state = {
   connected: false,
   connectedP2: false,
@@ -148,6 +198,7 @@ const state = {
   registeredTags: {}
 };
 
+// All player-facing copy lives here so the language toggle can swap the UI text.
 const TEXT = {
   en: {
     gameTitle: "Kitten<br />Nibbles",
@@ -263,6 +314,7 @@ const TEXT = {
   }
 };
 
+// Wire staff controls, simulation controls, and global audio/click behavior.
 elements.settingsButton.addEventListener("click", () => {
   elements.settingsPanel.hidden = false;
 });
@@ -332,11 +384,14 @@ window.orderStackApi.onClosedP2(() => {
   setConnectedP2(false);
 });
 
+// Initial app boot: discover serial ports, prepare simulation options, render home,
+// and start looping background music.
 refreshPorts();
 populateSimTokenSelect();
 renderHome();
 playBackgroundMusic();
 
+// Staff simulation helpers.
 function populateSimTokenSelect() {
   elements.simTokenSelect.innerHTML = "";
 
@@ -444,6 +499,7 @@ function findCorrectTokenUid() {
   return uid || null;
 }
 
+// Translation helpers.
 function t(key) {
   return TEXT[state.language][key] || TEXT.en[key] || key;
 }
@@ -463,6 +519,7 @@ function updateLanguageToggle() {
   elements.languageToggle.hidden = state.phase !== "HOME";
 }
 
+// Serial connection helpers.
 async function refreshPorts() {
   const ports = await window.orderStackApi.listPorts();
   const noneOption = () => { const o = document.createElement("option"); o.value = ""; o.textContent = "— none —"; return o; };
@@ -545,6 +602,7 @@ function setConnectedP2(connected) {
   elements.connectButtonP2.textContent = connected ? `P2: ${label}` : "Connect P2";
 }
 
+// Firmware event handling.
 function handleSerialLine(line) {
   if (line.startsWith("REMOVED|")) {
     handleRemovedLine(line);
@@ -645,6 +703,7 @@ function handleRemovedLine(line) {
   }
 }
 
+// Session lifecycle and round generation.
 async function startSession() {
   if (!state.connected) {
     elements.settingsPanel.hidden = false;
@@ -925,6 +984,7 @@ function createSortingAttributePairs() {
   return [first, second, first];
 }
 
+// Round transitions and hardware command helpers.
 function beginCountdown() {
   clearTimers();
   state.phase = "COUNTDOWN";
@@ -1154,6 +1214,7 @@ async function sendSortingLedCommand() {
   await sendLedCommand(`LED:SORT:LEFT:${leftLedColor}:RIGHT:${rightLedColor}`);
 }
 
+// Duplicate-scan protection.
 function resetRecentScans() {
   state.recentScans.LEFT = { uid: null, timestamp: 0 };
   state.recentScans.RIGHT = { uid: null, timestamp: 0 };
@@ -1177,6 +1238,8 @@ function rememberRecentScan(hole, uid, timestamp) {
   state.recentScans[hole] = { uid, timestamp };
 }
 
+// Single-player scan processing: validate the token, update UI, record metrics,
+// animate the cat, and finish the round once enough scans are accepted.
 function receiveScan(hole, uid) {
   const tag = TAGS[uid] || null;
   const round = state.currentRound;
@@ -1298,6 +1361,7 @@ function receiveScan(hole, uid) {
   }
 }
 
+// Finish a single-player round and choose the correct result screen.
 async function completeRound(timestamp) {
   if (!state.scanEnabled) {
     return;
@@ -1339,6 +1403,7 @@ async function completeRound(timestamp) {
   renderSortingComplete();
 }
 
+// Two-player scan processing mirrors receiveScan but keeps each player's state separate.
 function receiveScanForPlayer(playerState, hole, uid, playerIndex) {
   if (!playerState || playerState.roundDone) {
     return;
@@ -1500,6 +1565,7 @@ function receiveScanForPlayer(playerState, hole, uid, playerIndex) {
   }
 }
 
+// Resolve where a token belongs under a given sorting rule.
 function _expectedHoleForRound(round, tag) {
   if (!tag) {
     return null;
@@ -1518,6 +1584,7 @@ function _expectedHoleForRound(round, tag) {
   return null;
 }
 
+// Once both players finish a round, transition together to the shared result view.
 function _checkTwoPlayerRoundComplete() {
   if (!state.p1.roundDone || !state.p2.roundDone) {
     return;
@@ -1526,6 +1593,7 @@ function _checkTwoPlayerRoundComplete() {
   _completeTwoPlayerRound();
 }
 
+// Summarize both players' completed round and trigger result LEDs/screens.
 async function _completeTwoPlayerRound() {
   const mode = state.currentRound.mode;
   const roundNumber = state.roundIndex + 1;
@@ -1593,6 +1661,7 @@ async function _completeTwoPlayerRound() {
   }
 }
 
+// Staff token-registration helpers.
 async function toggleRegScan() {
   if (!state.connected) {
     addLog("Connect MCU before scanning.");
@@ -1674,6 +1743,7 @@ function copyTagsCode() {
   });
 }
 
+// Screen rendering helpers.
 function renderHome() {
   state.phase = "HOME";
   clearTimers();
@@ -2444,6 +2514,7 @@ function renderLeaderboardRows(rows, highlightIds) {
 }
 
 
+// Scoring and reusable visual building blocks.
 function scoreRound(correct, total, elapsedMs, complete) {
   if (!total) {
     return 0;
@@ -2523,6 +2594,7 @@ function renderRuleTile(value, attribute) {
   `;
 }
 
+// Participant form helpers keep typed names when the home screen rerenders.
 function readParticipantForm() {
   cacheParticipantForm();
   const nameInput = document.querySelector("#participant-name-input");
@@ -2564,6 +2636,7 @@ function cacheParticipantForm() {
   }
 }
 
+// Rule/snapshot helpers used for sorting accuracy and perseverative-error detection.
 function expectedHoleForCurrentRule(round, tag) {
   if (!tag) {
     return null;
@@ -2610,6 +2683,7 @@ function snapshotSortingRule(round) {
   };
 }
 
+// Database payload builders convert live game records into SQLite-ready objects.
 function buildSessionPayload(score, accuracy, totalSeconds) {
   const game1Scans = state.scans.filter((scan) => scan.mode === "MEMORY");
   const game2Scans = state.scans.filter((scan) => scan.mode === "SORTING");
@@ -2731,6 +2805,7 @@ async function saveCompletedSession(sessionPayload) {
   }
 }
 
+// Two-player database saves use the same session schema plus a shared match id.
 function buildTwoPlayerSessionPayload(playerState, stats) {
   const game1Scans = playerState.scans.filter((s) => s.mode === "MEMORY");
   const game2Scans = playerState.scans.filter((s) => s.mode === "SORTING");
@@ -2813,6 +2888,7 @@ function updateDatabaseStatus(result, error = null) {
   `;
 }
 
+// Metric helpers for score, accuracy, timing, switch cost, and executive metrics.
 function timePerTokenMs(record) {
   return record.total > 0 ? (record.seconds * 1000) / record.total : 0;
 }
@@ -2856,6 +2932,7 @@ function average(values) {
   return filtered.reduce((sum, value) => sum + value, 0) / filtered.length;
 }
 
+// Token and progress UI helpers.
 function tokenContent(value, attribute) {
   if (attribute === "color") {
     return "";
@@ -2947,6 +3024,7 @@ function colorValue(color) {
   }[color] || "#ffffff";
 }
 
+// Pixel-art SVG helpers.
 function shapeMarkup(shape, extraClass = "") {
   if (!shape) {
     return "";
@@ -3007,6 +3085,7 @@ function cat(extraClass = "", id = "") {
   `;
 }
 
+// Feedback helpers: eating animation, meows, button clicks, music, and screen halo.
 function animateCat(id, token = null) {
   const catElement = document.querySelector(`#${id}`);
 
@@ -3073,6 +3152,7 @@ function formatDuration(seconds) {
   return `${minutes}:${remaining}`;
 }
 
+// General utilities.
 function escapeHtml(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")

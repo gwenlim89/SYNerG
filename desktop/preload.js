@@ -1,18 +1,32 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+/*
+  Secure renderer API
+  -------------------
+  The browser UI cannot access Node.js directly. This preload bridge exposes
+  only the safe operations the game needs: serial connection, serial writes,
+  database saves/queries, and event listeners for incoming MCU messages.
+*/
 contextBridge.exposeInMainWorld("orderStackApi", {
+  // Serial port controls for the primary MCU.
   listPorts: () => ipcRenderer.invoke("serial:list"),
   connect: (portPath) => ipcRenderer.invoke("serial:connect", portPath),
   write: (text) => ipcRenderer.invoke("serial:write", text),
+
+  // SQLite-backed participant, score, and leaderboard operations.
   databasePath: () => ipcRenderer.invoke("db:path"),
   listParticipants: () => ipcRenderer.invoke("db:list-participants"),
   getLeaderboard: (limit) => ipcRenderer.invoke("db:get-leaderboard", limit),
   saveParticipant: (participant) => ipcRenderer.invoke("db:save-participant", participant),
   getOrCreateParticipant: (name) => ipcRenderer.invoke("db:get-or-create-participant", name),
   saveGameSession: (payload) => ipcRenderer.invoke("db:save-game-session", payload),
+
+  // Two-player mode uses a second MCU, so it has separate serial write/events.
   connectP2: (portPath) => ipcRenderer.invoke("serial:connect-p2", portPath),
   writeP2: (text) => ipcRenderer.invoke("serial:write-p2", text),
   createMatch: () => ipcRenderer.invoke("db:create-match"),
+
+  // Event subscriptions keep hardware events flowing into the renderer game loop.
   onLine: (callback) => ipcRenderer.on("serial:line", (_event, line) => callback(line)),
   onLineP2: (callback) => ipcRenderer.on("serial:line-p2", (_event, line) => callback(line)),
   onError: (callback) => ipcRenderer.on("serial:error", (_event, message) => callback(message)),

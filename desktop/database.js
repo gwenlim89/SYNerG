@@ -6,6 +6,29 @@ const path = require("path");
 const SQLITE_BIN = "/usr/bin/sqlite3";
 const PROJECT_DB_PATH = path.join(__dirname, "..", "kitten_nibbles.db");
 
+/*
+  SQLite persistence layer
+  ------------------------
+  This file stores each completed game session and calculates monitoring
+  ratings against the participant's first completed baseline session.
+
+  Function guide:
+  - initDatabase: creates/migrates the SQLite schema.
+  - copyLegacyDatabaseIfNeeded: preserves an older Electron userData database.
+  - getOrCreateParticipant/saveParticipant/listParticipants: manage players.
+  - createMatch: groups two-player sessions under one match id.
+  - getLeaderboard: returns top scores for the home-screen leaderboard.
+  - saveGameSession: writes one completed session plus Game 2 block/trial rows.
+  - sessionInsertSql/baselineInsertSql/blockInsertSql/trialInsertSql: build SQL rows.
+  - getBaseline: loads the participant's first-session comparison point.
+  - calculateMonitoringRating/rateScore/rateExecutive/rateCostIncrease:
+    classify score and executive-function changes as baseline/stable/watch/flagged.
+  - normalizeExecutiveMetrics/normalizeBlocks/normalizeTrials: validate UI payloads.
+  - worseRating/percentageDecline and sql helpers: keep rating and SQL output consistent.
+*/
+
+// Rating order lets the code choose the most serious status across score and
+// executive-function checks.
 const RATING_SEVERITY = {
   baseline: 0,
   stable: 0,
@@ -15,6 +38,7 @@ const RATING_SEVERITY = {
 
 let dbPath;
 
+// Create every table needed by the game and apply lightweight migrations.
 async function initDatabase() {
   dbPath = process.env.KITTEN_NIBBLES_DB_PATH || PROJECT_DB_PATH;
   copyLegacyDatabaseIfNeeded(dbPath);
@@ -22,11 +46,13 @@ async function initDatabase() {
   await runSql(`
     PRAGMA foreign_keys = ON;
 
+    -- Participants are intentionally simple: one unique id and one display name.
     CREATE TABLE IF NOT EXISTS participants (
       participant_id TEXT PRIMARY KEY,
       participant_name TEXT NOT NULL
     );
 
+    -- Sessions store the overall result and monitoring rating for one full playthrough.
     CREATE TABLE IF NOT EXISTS sessions (
       session_id TEXT PRIMARY KEY,
       participant_id TEXT NOT NULL,
@@ -45,6 +71,7 @@ async function initDatabase() {
       FOREIGN KEY (participant_id) REFERENCES participants(participant_id)
     );
 
+    -- The first completed session becomes the participant's personal baseline.
     CREATE TABLE IF NOT EXISTS baselines (
       participant_id TEXT PRIMARY KEY,
       baseline_session_id TEXT NOT NULL,
@@ -59,6 +86,7 @@ async function initDatabase() {
       FOREIGN KEY (baseline_session_id) REFERENCES sessions(session_id)
     );
 
+    -- Game 2 block rows summarize each 2-round colour/shape rule block.
     CREATE TABLE IF NOT EXISTS game2_blocks (
       block_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -77,6 +105,7 @@ async function initDatabase() {
       FOREIGN KEY (session_id) REFERENCES sessions(session_id)
     );
 
+    -- Game 2 trial rows keep only the placement-level data needed for executive metrics.
     CREATE TABLE IF NOT EXISTS game2_trials (
       trial_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -106,6 +135,7 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_trials_session
       ON game2_trials(session_id);
 
+    -- Two-player sessions share a match id so both players can be linked later.
     CREATE TABLE IF NOT EXISTS matches (
       match_id TEXT PRIMARY KEY,
       match_date TEXT NOT NULL
@@ -119,6 +149,8 @@ async function initDatabase() {
   return dbPath;
 }
 
+// If a previous version stored the database under Electron userData, copy it
+// into the project folder so the database travels with this project.
 function copyLegacyDatabaseIfNeeded(targetPath) {
   if (fs.existsSync(targetPath)) {
     return;
@@ -133,6 +165,7 @@ function copyLegacyDatabaseIfNeeded(targetPath) {
   fs.copyFileSync(legacyPath, targetPath);
 }
 
+// Look up a player by name or create a new participant row before starting.
 async function getOrCreateParticipant(name) {
   const participantName = normalizeRequiredText(name, "participant_name");
 
@@ -157,6 +190,7 @@ async function getOrCreateParticipant(name) {
   return { participantId, participantName, dbPath };
 }
 
+// Create a shared match id for two-player mode.
 async function createMatch() {
   const matchId = makeId("match");
   const matchDate = new Date().toISOString();
@@ -164,6 +198,7 @@ async function createMatch() {
   return { matchId };
 }
 
+// Insert or update a participant record.
 async function saveParticipant(participant) {
   const participantId = normalizeRequiredText(participant.participantId, "participant_id");
   const participantName = normalizeRequiredText(participant.participantName || participantId, "participant_name");
@@ -178,6 +213,7 @@ async function saveParticipant(participant) {
   return { participantId, participantName, dbPath };
 }
 
+// Return all participants for staff/debug views.
 async function listParticipants() {
   return querySql(`
     SELECT participant_id AS participantId,
@@ -187,6 +223,7 @@ async function listParticipants() {
   `);
 }
 
+// Build the top-score table shown on the leaderboard screen.
 async function getLeaderboard(limit) {
   const rowLimit = finiteInteger(limit) || 10;
 
@@ -203,6 +240,7 @@ async function getLeaderboard(limit) {
   `);
 }
 
+// Save one completed player's session and its derived executive-function data.
 async function saveGameSession(payload) {
   const participant = await saveParticipant(payload.participant || {});
   const sessionId = makeId("session");
@@ -253,6 +291,7 @@ async function saveGameSession(payload) {
   };
 }
 
+// Generate the SQL row for the session-level score and monitoring result.
 function sessionInsertSql({ sessionId, participantId, sessionDate, matchId, payload, rating }) {
   return `
     INSERT INTO sessions (
@@ -291,6 +330,7 @@ function sessionInsertSql({ sessionId, participantId, sessionDate, matchId, payl
   `;
 }
 
+// Save the first completed session as the participant's baseline comparison.
 function baselineInsertSql({ participantId, sessionId, payload, executiveMetrics }) {
   return `
     INSERT INTO baselines (
@@ -317,6 +357,7 @@ function baselineInsertSql({ participantId, sessionId, payload, executiveMetrics
   `;
 }
 
+// Generate one Game 2 block summary row.
 function blockInsertSql(block) {
   return `
     INSERT INTO game2_blocks (
@@ -353,6 +394,7 @@ function blockInsertSql(block) {
   `;
 }
 
+// Generate one Game 2 placement/trial row.
 function trialInsertSql(trial) {
   return `
     INSERT INTO game2_trials (
@@ -391,6 +433,7 @@ function trialInsertSql(trial) {
   `;
 }
 
+// Load a participant's baseline, if one already exists.
 async function getBaseline(participantId) {
   const rows = await querySql(`
     SELECT *
@@ -402,6 +445,7 @@ async function getBaseline(participantId) {
   return rows[0] || null;
 }
 
+// Combine overall score decline and executive-function decline into one monitoring status.
 function calculateMonitoringRating(payload, executiveMetrics, baseline) {
   if (!baseline) {
     return {
@@ -425,6 +469,7 @@ function calculateMonitoringRating(payload, executiveMetrics, baseline) {
   };
 }
 
+// Rate the total score against baseline using percentage decline thresholds.
 function rateScore(payload, baseline) {
   const reasons = [];
   let rating = "stable";
@@ -444,6 +489,7 @@ function rateScore(payload, baseline) {
   return { rating, reasons };
 }
 
+// Rate Game 2 executive-function metrics against baseline.
 function rateExecutive(payload, metrics, baseline) {
   const reasons = [];
   let rating = "stable";
@@ -499,6 +545,7 @@ function rateExecutive(payload, metrics, baseline) {
   return { rating, reasons };
 }
 
+// Rate reaction-time/adaptation increases with percentage or absolute thresholds.
 function rateCostIncrease(baselineValue, currentValue, label) {
   const reasons = [];
 
@@ -543,6 +590,7 @@ function rateCostIncrease(baselineValue, currentValue, label) {
   return { rating: "stable", reasons };
 }
 
+// Coerce executive metrics from the UI into safe numeric values.
 function normalizeExecutiveMetrics(metrics) {
   return {
     switchRtCostMs: finiteNumber(metrics.switchRtCostMs),
@@ -552,6 +600,7 @@ function normalizeExecutiveMetrics(metrics) {
   };
 }
 
+// Convert Game 2 block payloads into database-ready rows.
 function normalizeBlocks(blocks, sessionId) {
   return blocks.map((block) => ({
     blockId: makeId(`block${block.blockNumber || ""}`),
@@ -571,6 +620,7 @@ function normalizeBlocks(blocks, sessionId) {
   }));
 }
 
+// Convert Game 2 placement payloads into database-ready trial rows.
 function normalizeTrials(trials, sessionId, blockIdByNumber) {
   return trials
     .filter((trial) => blockIdByNumber.has(finiteInteger(trial.blockNumber)))
@@ -593,10 +643,12 @@ function normalizeTrials(trials, sessionId, blockIdByNumber) {
     }));
 }
 
+// Pick the more serious of two monitoring labels.
 function worseRating(left, right) {
   return RATING_SEVERITY[right] > RATING_SEVERITY[left] ? right : left;
 }
 
+// Calculate how far a current value fell below baseline.
 function percentageDecline(baselineValue, currentValue) {
   if (!Number.isFinite(baselineValue) || baselineValue <= 0) {
     return 0;
@@ -605,6 +657,7 @@ function percentageDecline(baselineValue, currentValue) {
   return Math.max(0, ((baselineValue - currentValue) / baselineValue) * 100);
 }
 
+// Require a non-empty string for fields that must exist in the database.
 function normalizeRequiredText(value, fieldName) {
   const text = String(value || "").trim();
 
@@ -615,6 +668,7 @@ function normalizeRequiredText(value, fieldName) {
   return text;
 }
 
+// Numeric coercion helpers keep SQL values finite and predictable.
 function finiteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -624,6 +678,7 @@ function finiteInteger(value) {
   return Math.round(finiteNumber(value));
 }
 
+// SQL escaping helpers protect text values from breaking generated statements.
 function sqlText(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
@@ -642,20 +697,24 @@ function sqlInteger(value) {
   return finiteInteger(value).toString();
 }
 
+// Generate readable ids without needing an external UUID dependency.
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// Execute a statement that does not need returned rows.
 function runSql(sql) {
   return execSql([dbPath, sql]);
 }
 
+// Execute a SELECT and parse sqlite3's JSON output.
 async function querySql(sql) {
   const stdout = await execSql(["-json", dbPath, sql]);
   const trimmed = stdout.trim();
   return trimmed ? JSON.parse(trimmed) : [];
 }
 
+// Thin wrapper around the system sqlite3 binary used by Electron's main process.
 function execSql(args) {
   return new Promise((resolve, reject) => {
     execFile(SQLITE_BIN, args, { maxBuffer: 1024 * 1024 * 4 }, (error, stdout, stderr) => {

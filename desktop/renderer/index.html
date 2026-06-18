@@ -7,12 +7,14 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <!-- Screen-edge flashes triggered after accepted left/right NFC scans. -->
     <div id="halo-left" class="screen-halo halo-left"></div>
     <div id="halo-right" class="screen-halo halo-right"></div>
 
     <main class="app-shell">
       <section class="game-frame">
         <div id="sky" class="sky">
+          <!-- Persistent HUD: language, settings, connection status, and total progress. -->
           <div class="hud">
             <button id="language-toggle" class="language-toggle" type="button" aria-label="Toggle language" title="Toggle language">EN</button>
             <button id="settings-button" class="settings-button" type="button" aria-label="Staff settings" title="Staff settings">⚙</button>
@@ -27,14 +29,17 @@
           <div class="cloud cloud-two" aria-hidden="true"></div>
           <div class="cloud cloud-three" aria-hidden="true"></div>
 
+          <!-- Renderer.js replaces this section with home, instruction, play, and result screens. -->
           <section id="game-screen" class="screen"></section>
 
+          <!-- Decorative game-world layers shared by most screens. -->
           <div class="hills hill-back" aria-hidden="true"></div>
           <div class="hills hill-front" aria-hidden="true"></div>
           <div class="ground" aria-hidden="true"></div>
         </div>
       </section>
 
+      <!-- Staff/debug panel: serial connection, simulation mode, logs, and tag registration. -->
       <section id="settings-panel" class="settings-panel" hidden>
         <div class="settings-heading">
           <div>
@@ -66,6 +71,7 @@
         </div>
 
         <div id="simulate-panel" class="reg-section" hidden>
+          <!-- Simulate scans when testing the UI without physical NFC readers. -->
           <p class="connection-label">Simulate scan</p>
           <div class="reg-assign-row">
             <select id="sim-player-select" aria-label="Simulated player">
@@ -93,6 +99,7 @@
         <ol id="log-list"></ol>
 
         <div class="reg-section">
+          <!-- Token registration helps staff capture new UID-to-color/shape mappings. -->
           <div class="log-heading">
             <h3>Token Registration</h3>
             <button id="reg-scan-button" class="secondary-button" type="button">Start Scanning</button>

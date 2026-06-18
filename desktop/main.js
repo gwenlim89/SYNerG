@@ -4,13 +4,18 @@ const { SerialPort } = require("serialport");
 const { ReadlineParser } = require("@serialport/parser-readline");
 const database = require("./database");
 
+// The renderer plays background music on load; this lets Electron autoplay it
+// without waiting for the first screen click.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
+// Main-process state. The main process owns serial ports and the database so
+// the renderer can stay sandboxed and talk through IPC only.
 let mainWindow;
 let activePort;
 let port2;
 let databaseReady;
 
+// Create the game window and load the pixel-art renderer.
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -29,6 +34,7 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 }
 
+// Initialize SQLite first so the UI can save participants/scores immediately.
 app.whenReady().then(async () => {
   databaseReady = database.initDatabase();
 
@@ -41,6 +47,7 @@ app.whenReady().then(async () => {
   createWindow();
 });
 
+// Release serial ports before quitting so PlatformIO/serial monitor can reopen them.
 app.on("window-all-closed", () => {
   closePort();
 
@@ -49,6 +56,7 @@ app.on("window-all-closed", () => {
   }
 });
 
+// List available USB serial devices for the staff settings panel.
 ipcMain.handle("serial:list", async () => {
   const ports = await SerialPort.list();
 
@@ -58,6 +66,7 @@ ipcMain.handle("serial:list", async () => {
   }));
 });
 
+// Connect Player 1's MCU and forward each newline-delimited firmware event to the renderer.
 ipcMain.handle("serial:connect", async (_event, portPath) => {
   await closePort();
 
@@ -81,6 +90,7 @@ ipcMain.handle("serial:connect", async (_event, portPath) => {
   return { path: portPath };
 });
 
+// Send scan/LED commands from the renderer to Player 1's firmware.
 ipcMain.handle("serial:write", async (_event, text) => {
   if (!activePort?.isOpen) {
     throw new Error("Serial port is not connected.");
@@ -91,6 +101,7 @@ ipcMain.handle("serial:write", async (_event, text) => {
   });
 });
 
+// Database IPC handlers expose the persistent participant/session store to the UI.
 ipcMain.handle("db:path", async () => {
   await databaseReady;
   return database.dbPath;
@@ -126,6 +137,7 @@ ipcMain.handle("db:create-match", async () => {
   return database.createMatch();
 });
 
+// Connect Player 2's MCU for two-player mode and forward its events separately.
 ipcMain.handle("serial:connect-p2", async (_event, portPath) => {
   if (port2?.isOpen) {
     const p = port2;
@@ -148,6 +160,7 @@ ipcMain.handle("serial:connect-p2", async (_event, portPath) => {
   return { path: portPath };
 });
 
+// Send scan/LED commands from the renderer to Player 2's firmware.
 ipcMain.handle("serial:write-p2", async (_event, text) => {
   if (!port2?.isOpen) {
     throw new Error("P2 serial port is not connected.");
@@ -158,6 +171,7 @@ ipcMain.handle("serial:write-p2", async (_event, text) => {
   });
 });
 
+// Close any open serial ports; used before reconnecting and during app shutdown.
 async function closePort() {
   const toClose = [activePort, port2].filter((p) => p?.isOpen);
   activePort = null;
@@ -165,6 +179,7 @@ async function closePort() {
   await Promise.all(toClose.map((p) => new Promise((resolve) => p.close(() => resolve()))));
 }
 
+// Safely forward main-process events to the renderer if the window still exists.
 function send(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
